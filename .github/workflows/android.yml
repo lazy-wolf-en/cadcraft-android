@@ -36,6 +36,7 @@ jobs:
         uses: Swatinem/rust-cache@v2
         with:
           workspaces: "cadcraft-src -> target"
+          cache-on-failure: true
 
       - name: Install Trunk
         run: |
@@ -51,7 +52,7 @@ jobs:
           lib_rs_path = os.path.join(ui_src, "lib.rs")
 
           tablet_lines = [
-              "use egui::{Color32, Context, Event, Id, Key, Modifiers, Order, RichText, Vec2, Window};",
+              "use egui::{Color32, Context, Event, Id, Key, Modifiers, Order, RichText, Theme, Vec2, Window};",
               "use crate::CadApp;",
               "",
               "#[derive(Clone, Copy, PartialEq, Eq)]",
@@ -82,11 +83,13 @@ jobs:
               "",
               "fn apply_tablet_style(ctx: &Context, scale: f32) {",
               "    ctx.set_zoom_factor(scale);",
-              "    ctx.style_mut(|style| {",
-              "        style.spacing.interact_size = Vec2::new(44.0, 36.0);",
-              "        style.spacing.button_padding = Vec2::new(10.0, 7.0);",
-              "        style.spacing.item_spacing = Vec2::new(6.0, 6.0);",
-              "    });",
+              "    for theme in [Theme::Dark, Theme::Light] {",
+              "        ctx.style_mut_of(theme, |style| {",
+              "            style.spacing.interact_size = Vec2::new(44.0, 36.0);",
+              "            style.spacing.button_padding = Vec2::new(10.0, 7.0);",
+              "            style.spacing.item_spacing = Vec2::new(6.0, 6.0);",
+              "        });",
+              "    }",
               "}",
               "",
               "fn push_key(ctx: &Context, key: Key) {",
@@ -416,9 +419,8 @@ jobs:
               1
           )
 
-          # Append module declaration at the END of lib.rs so inner #![...] attributes at line 1 stay intact
           if "mod tablet;" not in lib_rs:
-              lib_rs = lib_rs + "\n#[allow(dead_code, clippy::all)]\npub mod tablet;\n"
+              lib_rs = lib_rs + "\n#[allow(dead_code, deprecated, clippy::all)]\npub mod tablet;\n"
 
           with open(lib_rs_path, "w", encoding="utf-8") as f:
               f.write(lib_rs)
