@@ -430,9 +430,8 @@ jobs:
       - name: Compile CADCraft Tablet Edition to WebAssembly with Trunk
         working-directory: cadcraft-src/apps/cadcraft-web
         run: |
-          trunk build --release
           mkdir -p ${{ github.workspace }}/www
-          cp -r dist/* ${{ github.workspace }}/www/
+          trunk build --release --dist ${{ github.workspace }}/www
           find ${{ github.workspace }}/www -type f \( -name "*.gz" -o -name "*.br" \) -delete
 
       - name: Inject Android PDF/DXF/SVG Export Handler into index.html
