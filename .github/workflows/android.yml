@@ -23,10 +23,9 @@ jobs:
           distribution: 'temurin'
           java-version: '21'
 
-      - name: Clone CADCraft Rust Source & Optional Fonts
+      - name: Clone CADCraft Rust Source
         run: |
           git clone --depth 1 https://github.com/storytold/cadcraft.git cadcraft-src
-          git clone --depth 1 https://github.com/storytold/craft-fonts.git craft-fonts || true
 
       - name: Install Rust Toolchain (wasm32)
         uses: dtolnay/rust-toolchain@stable
@@ -52,8 +51,6 @@ jobs:
           lib_rs_path = os.path.join(ui_src, "lib.rs")
 
           tablet_lines = [
-              "#![allow(dead_code, clippy::all)]",
-              "",
               "use egui::{Color32, Context, Event, Id, Key, Modifiers, Order, RichText, Vec2, Window};",
               "use crate::CadApp;",
               "",
@@ -409,9 +406,6 @@ jobs:
           with open(lib_rs_path, "r", encoding="utf-8") as f:
               lib_rs = f.read()
 
-          if "mod tablet;" not in lib_rs:
-              lib_rs = "pub mod tablet;\n" + lib_rs
-
           target_sig = "fn ui_input(&mut self, ctx: &egui::Context) {"
           if target_sig not in lib_rs:
               raise RuntimeError(f"Could not find `{target_sig}` in {lib_rs_path}")
@@ -422,6 +416,10 @@ jobs:
               1
           )
 
+          # Append module declaration at the END of lib.rs so inner #![...] attributes at line 1 stay intact
+          if "mod tablet;" not in lib_rs:
+              lib_rs = lib_rs + "\n#[allow(dead_code, clippy::all)]\npub mod tablet;\n"
+
           with open(lib_rs_path, "w", encoding="utf-8") as f:
               f.write(lib_rs)
 
@@ -429,8 +427,6 @@ jobs:
 
       - name: Compile CADCraft Tablet Edition to WebAssembly with Trunk
         working-directory: cadcraft-src/apps/cadcraft-web
-        env:
-          CRAFT_FONTS_DIR: ${{ github.workspace }}/craft-fonts
         run: |
           trunk build --release
           mkdir -p ${{ github.workspace }}/www
