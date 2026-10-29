@@ -1,0 +1,435 @@
+name: Build CADCraft Tablet Edition APK (From Rust Source)
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main, master ]
+
+jobs:
+  build-tablet-apk:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout wrapper repository
+        uses: actions/checkout@v5
+
+      - name: Setup Node.js 24
+        uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+
+      - name: Setup Java 21 for Android Gradle
+        uses: actions/setup-java@v5
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+
+      - name: Clone CADCraft Rust Source & Optional Fonts
+        run: |
+          git clone --depth 1 https://github.com/storytold/cadcraft.git cadcraft-src
+          git clone --depth 1 https://github.com/storytold/craft-fonts.git craft-fonts || true
+
+      - name: Install Rust Toolchain (wasm32) & Trunk
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Cache Rust Compilation Artifacts
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "cadcraft-src -> target"
+
+      - name: Install Trunk & wasm-bindgen-cli
+        run: |
+          curl -L --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh | bash
+          cargo binstall -y trunk
+
+      - name: Inject Native Rust Tablet UI Module (crates/ui-egui/src/tablet.rs)
+        run: |
+          python3 - << 'PYEOF'
+          import os, re, glob
+
+          ui_src = "cadcraft-src/crates/ui-egui/src"
+          lib_rs_path = os.path.join(ui_src, "lib.rs")
+
+          with open(lib_rs_path, "r", encoding="utf-8") as f:
+              lib_rs = f.read()
+
+          # Detect App struct name and available direct methods across crates/ui-egui/src/*.rs
+          all_rs = ""
+          for p in glob.glob(os.path.join(ui_src, "*.rs")):
+              with open(p, "r", encoding="utf-8") as fh:
+                  all_rs += "\n" + fh.read()
+
+          app_match = re.search(r"impl\s+(?:eframe::)?App\s+for\s+([A-Za-z0-9_]+)", all_rs)
+          app_type = app_match.group(1) if app_match else "App"
+          print(f"Detected eframe::App struct: {app_type}")
+
+          has_cmdline = bool(re.search(r"fn\s+cmdline\s*\(\s*&mut\s+self\s*,\s*[A-Za-z0-9_]+\s*:\s*&str\s*\)", all_rs))
+          has_start = bool(re.search(r"fn\s+start\s*\(\s*&mut\s+self\s*,\s*[A-Za-z0-9_]+\s*:\s*&str\s*\)", all_rs))
+          print(f"Detected direct methods -> cmdline(&str): {has_cmdline}, start(&str): {has_start}")
+
+          cmdline_call = "let _ = app.cmdline(cmd);" if has_cmdline else "queue_text_and_enter(ctx, cmd);"
+          start_call = "let _ = app.start(id);" if has_start else "queue_text_and_enter(ctx, id);"
+
+          tablet_rs = f'''#![allow(dead_code, clippy::too_many_lines)]
+
+          use egui::{{Color32, Context, Event, Id, Key, Modifiers, Order, RichText, Vec2, Window}};
+          use crate::{app_type};
+
+          #[derive(Clone, Copy, PartialEq, Eq)]
+          enum ToolTab {{
+              Draw,
+              Modify,
+              Annotate,
+              View,
+          }}
+
+          #[derive(Clone)]
+          struct TabletState {{
+              initialized: bool,
+              ui_scale: f32,
+              show_tools: bool,
+              show_numpad: bool,
+              active_tab: ToolTab,
+              numpad_buf: String,
+              pending_keys: Vec<Key>,
+              pending_text: Vec<String>,
+          }}
+
+          impl Default for TabletState {{
+              fn default() -> Self {{
+                  Self {{
+                      initialized: false,
+                      ui_scale: 1.25,
+                      show_tools: true,
+                      show_numpad: true,
+                      active_tab: ToolTab::Draw,
+                      numpad_buf: String::new(),
+                      pending_keys: Vec::new(),
+                      pending_text: Vec::new(),
+                  }}
+              }}
+          }}
+
+          fn apply_tablet_style(ctx: &Context, scale: f32) {{
+              ctx.set_zoom_factor(scale);
+              ctx.style_mut(|style| {{
+                  style.spacing.interact_size = Vec2::new(44.0, 36.0);
+                  style.spacing.button_padding = Vec2::new(10.0, 7.0);
+                  style.spacing.item_spacing = Vec2::new(6.0, 6.0);
+                  style.spacing.scroll.bar_width = 14.0;
+              }});
+          }}
+
+          fn push_key(ctx: &Context, key: Key) {{
+              if let Some(focused) = ctx.memory(|m| m.focused()) {{
+                  ctx.memory_mut(|m| m.surrender_focus(focused));
+              }}
+              ctx.input_mut(|i| {{
+                  i.focused = true;
+                  i.events.push(Event::Key {{
+                      key,
+                      physical_key: Some(key),
+                      pressed: true,
+                      repeat: false,
+                      modifiers: Modifiers::NONE,
+                  }});
+                  i.events.push(Event::Key {{
+                      key,
+                      physical_key: Some(key),
+                      pressed: false,
+                      repeat: false,
+                      modifiers: Modifiers::NONE,
+                  }});
+              }});
+          }}
+
+          fn queue_text_and_enter(ctx: &Context, text: &str) {{
+              if let Some(focused) = ctx.memory(|m| m.focused()) {{
+                  ctx.memory_mut(|m| m.surrender_focus(focused));
+              }}
+              ctx.input_mut(|i| {{
+                  i.focused = true;
+                  if !text.is_empty() {{
+                      i.events.push(Event::Text(text.to_string()));
+                  }}
+                  i.events.push(Event::Key {{
+                      key: Key::Enter,
+                      physical_key: Some(Key::Enter),
+                      pressed: true,
+                      repeat: false,
+                      modifiers: Modifiers::NONE,
+                  }});
+                  i.events.push(Event::Key {{
+                      key: Key::Enter,
+                      physical_key: Some(Key::Enter),
+                      pressed: false,
+                      repeat: false,
+                      modifiers: Modifiers::NONE,
+                  }});
+              }});
+          }}
+
+          fn exec_cmdline(app: &mut {app_type}, ctx: &Context, cmd: &str) {{
+              let _ = (&app, &ctx);
+              {cmdline_call}
+          }}
+
+          fn exec_start(app: &mut {app_type}, ctx: &Context, id: &str) {{
+              let _ = (&app, &ctx);
+              {start_call}
+          }}
+
+          pub fn update(app: &mut {app_type}, ctx: &Context) {{
+              let state_id = Id::new("cadcraft_tablet_state_v1");
+              let mut state = ctx.data_mut(|d| d.get_temp::<TabletState>(state_id).unwrap_or_default());
+
+              if !state.initialized {{
+                  state.initialized = true;
+                  apply_tablet_style(ctx, state.ui_scale);
+              }}
+
+              // Drain any queued events from previous frame
+              for txt in state.pending_text.drain(..) {{
+                  exec_cmdline(app, ctx, &txt);
+              }}
+              for k in state.pending_keys.drain(..) {{
+                  push_key(ctx, k);
+              }}
+
+              // 1. Bottom-Center Tablet Action Dock
+              egui::Area::new(Id::new("tablet_bottom_dock"))
+                  .order(Order::Foreground)
+                  .anchor(egui::Align2::CENTER_BOTTOM, Vec2::new(0.0, -34.0))
+                  .show(ctx, |ui| {{
+                      egui::Frame::window(ui.style())
+                          .fill(Color32::from_rgba_unmultiplied(24, 26, 30, 242))
+                          .corner_radius(10.0)
+                          .inner_margin(egui::Margin::symmetric(10, 6))
+                          .show(ui, |ui| {{
+                              ui.horizontal(|ui| {{
+                                  let tools_btn = egui::Button::new(
+                                      RichText::new("🧰 Tools").size(14.0).strong()
+                                  ).fill(if state.show_tools {{ Color32::from_rgb(0, 110, 180) }} else {{ Color32::from_rgb(50, 52, 58) }});
+                                  if ui.add(tools_btn).clicked() {{
+                                      state.show_tools = !state.show_tools;
+                                  }}
+
+                                  let numpad_btn = egui::Button::new(
+                                      RichText::new("🔢 Numpad").size(14.0).strong()
+                                  ).fill(if state.show_numpad {{ Color32::from_rgb(0, 110, 180) }} else {{ Color32::from_rgb(50, 52, 58) }});
+                                  if ui.add(numpad_btn).clicked() {{
+                                      state.show_numpad = !state.show_numpad;
+                                  }}
+
+                                  ui.separator();
+
+                                  if ui.button(RichText::new("↶ Undo").size(14.0)).clicked() {{
+                                      exec_cmdline(app, ctx, "u");
+                                  }}
+                                  if ui.button(RichText::new("↷ Redo").size(14.0)).clicked() {{
+                                      exec_cmdline(app, ctx, "redo");
+                                  }}
+
+                                  ui.separator();
+
+                                  if ui.button(RichText::new("📐 Ortho").size(13.0)).clicked() {{
+                                      push_key(ctx, Key::F8);
+                                  }}
+                                  if ui.button(RichText::new("🧲 Snap").size(13.0)).clicked() {{
+                                      push_key(ctx, Key::F3);
+                                  }}
+                                  if ui.button(RichText::new("# Grid").size(13.0)).clicked() {{
+                                      push_key(ctx, Key::F7);
+                                  }}
+                                  if ui.button(RichText::new("🔍 Fit").size(13.0)).clicked() {{
+                                      exec_cmdline(app, ctx, "zoom e");
+                                  }}
+
+                                  ui.separator();
+
+                                  let enter_btn = egui::Button::new(
+                                      RichText::new("✓ ENTER").size(14.0).strong().color(Color32::WHITE)
+                                  ).fill(Color32::from_rgb(28, 130, 55));
+                                  if ui.add(enter_btn).clicked() {{
+                                      if state.numpad_buf.is_empty() {{
+                                          exec_cmdline(app, ctx, "");
+                                          push_key(ctx, Key::Enter);
+                                      }} else {{
+                                          let cmd = state.numpad_buf.clone();
+                                          state.numpad_buf.clear();
+                                          exec_cmdline(app, ctx, &cmd);
+                                      }}
+                                  }}
+
+                                  let esc_btn = egui::Button::new(
+                                      RichText::new("✕ ESC").size(14.0).strong().color(Color32::WHITE)
+                                  ).fill(Color32::from_rgb(175, 42, 42));
+                                  if ui.add(esc_btn).clicked() {{
+                                      state.numpad_buf.clear();
+                                      push_key(ctx, Key::Escape);
+                                  }}
+
+                                  ui.separator();
+
+                                  if ui.button(RichText::new("A-").size(13.0)).clicked() {{
+                                      state.ui_scale = (state.ui_scale - 0.1).max(0.85);
+                                      apply_tablet_style(ctx, state.ui_scale);
+                                  }}
+                                  if ui.button(RichText::new("A+").size(13.0)).clicked() {{
+                                      state.ui_scale = (state.ui_scale + 0.1).min(1.75);
+                                      apply_tablet_style(ctx, state.ui_scale);
+                                  }}
+                              }});
+                          }});
+                  }});
+
+              // 2. Floating Tablet CAD Numpad & Coordinate Pad
+              if state.show_numpad {{
+                  Window::new("🔢 CAD Numpad & Coords")
+                      .id(Id::new("tablet_numpad_win"))
+                      .default_pos(egui::pos2(24.0, 420.0))
+                      .resizable(false)
+                      .collapsible(true)
+                      .order(Order::Foreground)
+                      .show(ctx, |ui| {{
+                          // Buffer readout row
+                          ui.horizontal(|ui| {{
+                              let display_text = if state.numpad_buf.is_empty() {{
+                                  "Type coord / dist / cmd...".to_string()
+                              }} else {{
+                                  state.numpad_buf.clone()
+                              }};
+                              let text_color = if state.numpad_buf.is_empty() {{
+                                  Color32::GRAY
+                              }} else {{
+                                  Color32::from_rgb(0, 255, 128)
+                              }};
+                              egui::Frame::canvas(ui.style())
+                                  .fill(Color32::from_rgb(15, 17, 20))
+                                  .inner_margin(egui::Margin::symmetric(8, 6))
+                                  .show(ui, |ui| {{
+                                      ui.set_min_width(165.0);
+                                      ui.label(RichText::new(display_text).monospace().size(16.0).color(text_color));
+                                  }});
+                              if ui.button(RichText::new("CLR").size(13.0)).clicked() {{
+                                  state.numpad_buf.clear();
+                              }}
+                          }});
+
+                          ui.add_space(4.0);
+
+                          // 4x4 Numpad Grid
+                          let rows: [[&str; 4]; 4] = [
+                              ["7", "8", "9", "@"],
+                              ["4", "5", "6", "<"],
+                              ["1", "2", "3", ","],
+                              ["0", ".", "-", "⌫"],
+                          ];
+                          for row in &rows {{
+                              ui.horizontal(|ui| {{
+                                  for &key_label in row {{
+                                      let btn = egui::Button::new(
+                                          RichText::new(key_label).monospace().size(17.0).strong()
+                                      ).min_size(Vec2::new(50.0, 42.0));
+                                      if ui.add(btn).clicked() {{
+                                          if key_label == "⌫" {{
+                                              if state.numpad_buf.pop().is_none() {{
+                                                  push_key(ctx, Key::Backspace);
+                                              }}
+                                          }} else {{
+                                              state.numpad_buf.push_str(key_label);
+                                          }}
+                                      }}
+                                  }}
+                              }});
+                          }}
+
+                          ui.add_space(4.0);
+
+                          // Quick Prompt Keyword Chips
+                          ui.horizontal_wrapped(|ui| {{
+                              let chips = [
+                                  ("Close", "c"),
+                                  ("Undo", "u"),
+                                  ("Radius", "r"),
+                                  ("Dia", "d"),
+                                  ("2P", "2p"),
+                                  ("3P", "3p"),
+                                  ("All", "all"),
+                              ];
+                              for (label, kw) in chips {{
+                                  if ui.button(RichText::new(label).size(12.0)).clicked() {{
+                                      exec_cmdline(app, ctx, kw);
+                                  }}
+                              }}
+                          }});
+
+                          ui.add_space(4.0);
+
+                          // Full-width Submit / Enter & Cancel row
+                          ui.horizontal(|ui| {{
+                              let submit_btn = egui::Button::new(
+                                  RichText::new("✓ SUBMIT / ENTER").size(15.0).strong().color(Color32::WHITE)
+                              )
+                              .fill(Color32::from_rgb(28, 130, 55))
+                              .min_size(Vec2::new(158.0, 42.0));
+
+                              if ui.add(submit_btn).clicked() {{
+                                  if state.numpad_buf.is_empty() {{
+                                      exec_cmdline(app, ctx, "");
+                                      push_key(ctx, Key::Enter);
+                                  }} else {{
+                                      let cmd = state.numpad_buf.clone();
+                                      state.numpad_buf.clear();
+                                      exec_cmdline(app, ctx, &cmd);
+                                  }}
+                              }}
+
+                              let esc_btn = egui::Button::new(
+                                  RichText::new("✕ ESC").size(14.0).strong().color(Color32::WHITE)
+                              )
+                              .fill(Color32::from_rgb(175, 42, 42))
+                              .min_size(Vec2::new(52.0, 42.0));
+
+                              if ui.add(esc_btn).clicked() {{
+                                  state.numpad_buf.clear();
+                                  push_key(ctx, Key::Escape);
+                              }}
+                          }});
+                      }});
+              }}
+
+              // 3. Floating Tablet Quick-Tool Palette
+              if state.show_tools {{
+                  Window::new("🧰 Tablet CAD Tools")
+                      .id(Id::new("tablet_tools_win"))
+                      .default_pos(egui::pos2(24.0, 60.0))
+                      .resizable(false)
+                      .collapsible(true)
+                      .order(Order::Foreground)
+                      .show(ctx, |ui| {{
+                          ui.horizontal(|ui| {{
+                              if ui.selectable_label(state.active_tab == ToolTab::Draw, "✏ Draw").clicked() {{
+                                  state.active_tab = ToolTab::Draw;
+                              }}
+                              if ui.selectable_label(state.active_tab == ToolTab::Modify, "🔧 Modify").clicked() {{
+                                  state.active_tab = ToolTab::Modify;
+                              }}
+                              if ui.selectable_label(state.active_tab == ToolTab::Annotate, "📏 Dim").clicked() {{
+                                  state.active_tab = ToolTab::Annotate;
+                              }}
+                              if ui.selectable_label(state.active_tab == ToolTab::View, "👁 View").clicked() {{
+                                  state.active_tab = ToolTab::View;
+                              }}
+                          }});
+                          ui.separator();
+
+                          let tools: &[(&str, &str)] = match state.active_tab {{
+                              ToolTab::Draw => &[
+                                  ("Line", "line"),
+                                  ("PLine", "pline"),
+                                  ("Rect", "rectang"),
+                                  ("Circle", "circle"),
+                                  ("Arc", "arc"),
+                    
