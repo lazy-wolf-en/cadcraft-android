@@ -1,4 +1,3 @@
-
 name: Build CADCraft Tablet Edition APK (From Rust Source)
 
 on:
@@ -52,17 +51,20 @@ jobs:
           ui_src = "cadcraft-src/crates/ui-egui/src"
           lib_rs_path = os.path.join(ui_src, "lib.rs")
 
-          with open(lib_rs_path, "r", encoding="utf-8") as f:
-              lib_rs = f.read()
+          rs_files = sorted(glob.glob(os.path.join(ui_src, "*.rs")))
+          # Put lib.rs first in search order
+          if lib_rs_path in rs_files:
+              rs_files.remove(lib_rs_path)
+              rs_files.insert(0, lib_rs_path)
 
           all_rs = ""
-          for p in glob.glob(os.path.join(ui_src, "*.rs")):
+          for p in rs_files:
               with open(p, "r", encoding="utf-8") as fh:
                   all_rs += "\n" + fh.read()
 
-          app_match = re.search(r"impl\s+(?:eframe::)?App\s+for\s+([A-Za-z0-9_]+)", all_rs)
+          app_match = re.search(r"pub\s+struct\s+(App|CadApp|UiApp)\b", all_rs)
           app_type = app_match.group(1) if app_match else "App"
-          print(f"Detected eframe::App struct: {app_type}")
+          print(f"Detected UI App struct: {app_type}")
 
           has_cmdline = bool(re.search(r"fn\s+cmdline\s*\(\s*&mut\s+self\s*,\s*[A-Za-z0-9_]+\s*:\s*&str\s*\)", all_rs))
           has_start = bool(re.search(r"fn\s+start\s*\(\s*&mut\s+self\s*,\s*[A-Za-z0-9_]+\s*:\s*&str\s*\)", all_rs))
@@ -409,7 +411,7 @@ jobs:
               "                        (\"Move\", \"move\"), (\"Copy\", \"copy\"), (\"Rotate\", \"rotate\"),",
               "                        (\"Scale\", \"scale\"), (\"Mirror\", \"mirror\"), (\"Offset\", \"offset\"),",
               "                        (\"Trim\", \"trim\"), (\"Extend\", \"extend\"), (\"Fillet\", \"fillet\"),",
-              "                        (\"Chamfer\", \"chamfer\"), (\"Explode\", \"explode\"), (\"Join\", \"join\"),",
+              "                        (\"Chamfer\", \"chamfer\"), (\"Explode\", \"explode\"), (\"Join\", \"Join\"),",
               "                        (\"Break\", \"break\"), (\"Array\", \"arrayrect\"), (\"Stretch\", \"stretch\"),",
               "                        (\"Erase\", \"erase\"),",
               "                    ],",
@@ -454,23 +456,43 @@ jobs:
           with open(os.path.join(ui_src, "tablet.rs"), "w", encoding="utf-8") as f:
               f.write("\n".join(tablet_lines) + "\n")
 
+          # Add pub mod tablet; to lib.rs
+          with open(lib_rs_path, "r", encoding="utf-8") as f:
+              lib_rs = f.read()
           if "mod tablet;" not in lib_rs:
-              lib_rs = re.sub(r"(\b(?:pub\s+)?mod\s+[a-zA-Z0-9_]+\s*;)", r"mod tablet;\n\1", lib_rs, count=1)
+              lib_rs = "pub mod tablet;\n" + lib_rs
+              with open(lib_rs_path, "w", encoding="utf-8") as f:
+                  f.write(lib_rs)
 
+          # Match 2-argument or 3-argument update/show/ui method taking (&mut self, ctx: &...Context...)
           update_pattern = re.compile(
-              r"(fn\s+update\s*\(\s*&mut\s+self\s*,\s*([a-zA-Z0-9_]+)\s*:\s*&(?:egui::)?Context\s*,[^{]+\{)"
+              r"((?:pub(?:\([^)]*\))?\s+)?fn\s+(?:update|show|ui|frame)\s*\(\s*&mut\s+self\s*,\s*([a-zA-Z0-9_]+)\s*:\s*&(?:[a-zA-Z0-9_]+::)?Context\b[^{]*\{)"
           )
-          m = update_pattern.search(lib_rs)
-          if not m:
-              raise RuntimeError("Could not locate fn update(&mut self, ctx: &egui::Context, ...) in lib.rs")
 
-          ctx_ident = m.group(2).lstrip("_")
-          replacement_header = m.group(1).replace(f"{m.group(2)}:", f"{ctx_ident}:")
-          hook_line = f"\n        crate::tablet::update(self, {ctx_ident});\n"
-          lib_rs = lib_rs[:m.start()] + replacement_header + hook_line + lib_rs[m.end():]
+          patched = False
+          for path in rs_files:
+              with open(path, "r", encoding="utf-8") as f:
+                  content = f.read()
+              m = update_pattern.search(content)
+              if m:
+                  ctx_ident = m.group(2).lstrip("_")
+                  replacement_header = m.group(1).replace(f"{m.group(2)}:", f"{ctx_ident}:")
+                  hook_line = f"\n        crate::tablet::update(self, {ctx_ident});\n"
+                  content = content[:m.start()] + replacement_header + hook_line + content[m.end():]
+                  with open(path, "w", encoding="utf-8") as f:
+                      f.write(content)
+                  print(f"Hooked crate::tablet::update(self, {ctx_ident}) into {path} -> {m.group(1).splitlines()[0]}")
+                  patched = True
+                  break
 
-          with open(lib_rs_path, "w", encoding="utf-8") as f:
-              f.write(lib_rs)
+          if not patched:
+              # Diagnostic dump of all fn definitions taking &mut self in crates/ui-egui
+              for path in rs_files:
+                  with open(path, "r", encoding="utf-8") as f:
+                      for line in f:
+                          if "fn " in line and "&mut self" in line:
+                              print(f"{os.path.basename(path)}: {line.strip()}")
+              raise RuntimeError("Could not locate main Context update method in crates/ui-egui/src/")
 
           print("Successfully patched crates/ui-egui with native Tablet UI module!")
 
