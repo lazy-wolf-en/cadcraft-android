@@ -46,38 +46,16 @@ jobs:
       - name: Inject Native Rust Tablet UI Module (crates/ui-egui/src/tablet.rs)
         shell: python3 {0}
         run: |
-          import os, re, glob
+          import os
 
           ui_src = "cadcraft-src/crates/ui-egui/src"
           lib_rs_path = os.path.join(ui_src, "lib.rs")
 
-          rs_files = sorted(glob.glob(os.path.join(ui_src, "*.rs")))
-          # Put lib.rs first in search order
-          if lib_rs_path in rs_files:
-              rs_files.remove(lib_rs_path)
-              rs_files.insert(0, lib_rs_path)
-
-          all_rs = ""
-          for p in rs_files:
-              with open(p, "r", encoding="utf-8") as fh:
-                  all_rs += "\n" + fh.read()
-
-          app_match = re.search(r"pub\s+struct\s+(App|CadApp|UiApp)\b", all_rs)
-          app_type = app_match.group(1) if app_match else "App"
-          print(f"Detected UI App struct: {app_type}")
-
-          has_cmdline = bool(re.search(r"fn\s+cmdline\s*\(\s*&mut\s+self\s*,\s*[A-Za-z0-9_]+\s*:\s*&str\s*\)", all_rs))
-          has_start = bool(re.search(r"fn\s+start\s*\(\s*&mut\s+self\s*,\s*[A-Za-z0-9_]+\s*:\s*&str\s*\)", all_rs))
-          print(f"Detected direct methods -> cmdline(&str): {has_cmdline}, start(&str): {has_start}")
-
-          cmdline_call = "let _ = app.cmdline(cmd);" if has_cmdline else "queue_text_and_enter(ctx, cmd);"
-          start_call = "let _ = app.start(id);" if has_start else "queue_text_and_enter(ctx, id);"
-
           tablet_lines = [
-              "#![allow(dead_code, clippy::too_many_lines)]",
+              "#![allow(dead_code, clippy::all)]",
               "",
               "use egui::{Color32, Context, Event, Id, Key, Modifiers, Order, RichText, Vec2, Window};",
-              f"use crate::{app_type};",
+              "use crate::CadApp;",
               "",
               "#[derive(Clone, Copy, PartialEq, Eq)]",
               "enum ToolTab { Draw, Modify, Annotate, View }",
@@ -137,43 +115,15 @@ jobs:
               "    });",
               "}",
               "",
-              "fn queue_text_and_enter(ctx: &Context, text: &str) {",
-              "    if let Some(focused) = ctx.memory(|m| m.focused()) {",
-              "        ctx.memory_mut(|m| m.surrender_focus(focused));",
-              "    }",
-              "    ctx.input_mut(|i| {",
-              "        i.focused = true;",
-              "        if !text.is_empty() {",
-              "            i.events.push(Event::Text(text.to_string()));",
-              "        }",
-              "        i.events.push(Event::Key {",
-              "            key: Key::Enter,",
-              "            physical_key: Some(Key::Enter),",
-              "            pressed: true,",
-              "            repeat: false,",
-              "            modifiers: Modifiers::NONE,",
-              "        });",
-              "        i.events.push(Event::Key {",
-              "            key: Key::Enter,",
-              "            physical_key: Some(Key::Enter),",
-              "            pressed: false,",
-              "            repeat: false,",
-              "            modifiers: Modifiers::NONE,",
-              "        });",
-              "    });",
+              "fn exec_cmdline(app: &mut CadApp, _ctx: &Context, cmd: &str) {",
+              "    let _ = app.cmdline(cmd);",
               "}",
               "",
-              f"fn exec_cmdline(app: &mut {app_type}, ctx: &Context, cmd: &str) {{",
-              "    let _ = (&app, &ctx);",
-              f"    {cmdline_call}",
+              "fn exec_start(app: &mut CadApp, _ctx: &Context, id: &str) {",
+              "    app.start(id);",
               "}",
               "",
-              f"fn exec_start(app: &mut {app_type}, ctx: &Context, id: &str) {{",
-              "    let _ = (&app, &ctx);",
-              f"    {start_call}",
-              "}",
-              "",
-              f"pub fn update(app: &mut {app_type}, ctx: &Context) {{",
+              "pub fn update(app: &mut CadApp, ctx: &Context) {",
               "    let state_id = Id::new(\"cadcraft_tablet_state_v1\");",
               "    let mut state = ctx.data_mut(|d| d.get_temp::<TabletState>(state_id).unwrap_or_default());",
               "",
@@ -411,7 +361,7 @@ jobs:
               "                        (\"Move\", \"move\"), (\"Copy\", \"copy\"), (\"Rotate\", \"rotate\"),",
               "                        (\"Scale\", \"scale\"), (\"Mirror\", \"mirror\"), (\"Offset\", \"offset\"),",
               "                        (\"Trim\", \"trim\"), (\"Extend\", \"extend\"), (\"Fillet\", \"fillet\"),",
-              "                        (\"Chamfer\", \"chamfer\"), (\"Explode\", \"explode\"), (\"Join\", \"Join\"),",
+              "                        (\"Chamfer\", \"chamfer\"), (\"Explode\", \"explode\"), (\"Join\", \"join\"),",
               "                        (\"Break\", \"break\"), (\"Array\", \"arrayrect\"), (\"Stretch\", \"stretch\"),",
               "                        (\"Erase\", \"erase\"),",
               "                    ],",
@@ -456,45 +406,26 @@ jobs:
           with open(os.path.join(ui_src, "tablet.rs"), "w", encoding="utf-8") as f:
               f.write("\n".join(tablet_lines) + "\n")
 
-          # Add pub mod tablet; to lib.rs
           with open(lib_rs_path, "r", encoding="utf-8") as f:
               lib_rs = f.read()
+
           if "mod tablet;" not in lib_rs:
               lib_rs = "pub mod tablet;\n" + lib_rs
-              with open(lib_rs_path, "w", encoding="utf-8") as f:
-                  f.write(lib_rs)
 
-          # Match 2-argument or 3-argument update/show/ui method taking (&mut self, ctx: &...Context...)
-          update_pattern = re.compile(
-              r"((?:pub(?:\([^)]*\))?\s+)?fn\s+(?:update|show|ui|frame)\s*\(\s*&mut\s+self\s*,\s*([a-zA-Z0-9_]+)\s*:\s*&(?:[a-zA-Z0-9_]+::)?Context\b[^{]*\{)"
+          target_sig = "fn ui_input(&mut self, ctx: &egui::Context) {"
+          if target_sig not in lib_rs:
+              raise RuntimeError(f"Could not find `{target_sig}` in {lib_rs_path}")
+
+          lib_rs = lib_rs.replace(
+              target_sig,
+              target_sig + "\n        crate::tablet::update(self, ctx);",
+              1
           )
 
-          patched = False
-          for path in rs_files:
-              with open(path, "r", encoding="utf-8") as f:
-                  content = f.read()
-              m = update_pattern.search(content)
-              if m:
-                  ctx_ident = m.group(2).lstrip("_")
-                  replacement_header = m.group(1).replace(f"{m.group(2)}:", f"{ctx_ident}:")
-                  hook_line = f"\n        crate::tablet::update(self, {ctx_ident});\n"
-                  content = content[:m.start()] + replacement_header + hook_line + content[m.end():]
-                  with open(path, "w", encoding="utf-8") as f:
-                      f.write(content)
-                  print(f"Hooked crate::tablet::update(self, {ctx_ident}) into {path} -> {m.group(1).splitlines()[0]}")
-                  patched = True
-                  break
+          with open(lib_rs_path, "w", encoding="utf-8") as f:
+              f.write(lib_rs)
 
-          if not patched:
-              # Diagnostic dump of all fn definitions taking &mut self in crates/ui-egui
-              for path in rs_files:
-                  with open(path, "r", encoding="utf-8") as f:
-                      for line in f:
-                          if "fn " in line and "&mut self" in line:
-                              print(f"{os.path.basename(path)}: {line.strip()}")
-              raise RuntimeError("Could not locate main Context update method in crates/ui-egui/src/")
-
-          print("Successfully patched crates/ui-egui with native Tablet UI module!")
+          print("Successfully hooked crate::tablet::update(self, ctx) into CadApp::ui_input!")
 
       - name: Compile CADCraft Tablet Edition to WebAssembly with Trunk
         working-directory: cadcraft-src/apps/cadcraft-web
