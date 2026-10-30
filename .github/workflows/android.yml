@@ -43,7 +43,7 @@ jobs:
           curl -L --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh | bash
           cargo binstall -y trunk
 
-      - name: Inject Native Rust Tablet UI Module (crates/ui-egui/src/tablet.rs)
+      - name: Inject Tablet Module (crates/ui-egui/src/tablet.rs)
         shell: python3 {0}
         run: |
           import os
@@ -51,360 +51,739 @@ jobs:
           ui_src = "cadcraft-src/crates/ui-egui/src"
           lib_rs_path = os.path.join(ui_src, "lib.rs")
 
-          tablet_lines = [
-              "use egui::{Color32, Context, Event, Id, Key, Modifiers, Order, RichText, Theme, Vec2, Window};",
-              "use crate::CadApp;",
-              "",
-              "#[derive(Clone, Copy, PartialEq, Eq)]",
-              "enum ToolTab { Draw, Modify, Annotate, View }",
-              "",
-              "#[derive(Clone)]",
-              "struct TabletState {",
-              "    initialized: bool,",
-              "    ui_scale: f32,",
-              "    show_tools: bool,",
-              "    show_numpad: bool,",
-              "    active_tab: ToolTab,",
-              "    numpad_buf: String,",
-              "}",
-              "",
-              "impl Default for TabletState {",
-              "    fn default() -> Self {",
-              "        Self {",
-              "            initialized: false,",
-              "            ui_scale: 1.25,",
-              "            show_tools: true,",
-              "            show_numpad: true,",
-              "            active_tab: ToolTab::Draw,",
-              "            numpad_buf: String::new(),",
-              "        }",
-              "    }",
-              "}",
-              "",
-              "fn apply_tablet_style(ctx: &Context, scale: f32) {",
-              "    ctx.set_zoom_factor(scale);",
-              "    for theme in [Theme::Dark, Theme::Light] {",
-              "        ctx.style_mut_of(theme, |style| {",
-              "            style.spacing.interact_size = Vec2::new(44.0, 36.0);",
-              "            style.spacing.button_padding = Vec2::new(10.0, 7.0);",
-              "            style.spacing.item_spacing = Vec2::new(6.0, 6.0);",
-              "        });",
-              "    }",
-              "}",
-              "",
-              "fn push_key(ctx: &Context, key: Key) {",
-              "    if let Some(focused) = ctx.memory(|m| m.focused()) {",
-              "        ctx.memory_mut(|m| m.surrender_focus(focused));",
-              "    }",
-              "    ctx.input_mut(|i| {",
-              "        i.focused = true;",
-              "        i.events.push(Event::Key {",
-              "            key,",
-              "            physical_key: Some(key),",
-              "            pressed: true,",
-              "            repeat: false,",
-              "            modifiers: Modifiers::NONE,",
-              "        });",
-              "        i.events.push(Event::Key {",
-              "            key,",
-              "            physical_key: Some(key),",
-              "            pressed: false,",
-              "            repeat: false,",
-              "            modifiers: Modifiers::NONE,",
-              "        });",
-              "    });",
-              "}",
-              "",
-              "fn exec_cmdline(app: &mut CadApp, _ctx: &Context, cmd: &str) {",
-              "    let _ = app.cmdline(cmd);",
-              "}",
-              "",
-              "fn exec_start(app: &mut CadApp, _ctx: &Context, id: &str) {",
-              "    app.start(id);",
-              "}",
-              "",
-              "pub fn update(app: &mut CadApp, ctx: &Context) {",
-              "    let state_id = Id::new(\"cadcraft_tablet_state_v1\");",
-              "    let mut state = ctx.data_mut(|d| d.get_temp::<TabletState>(state_id).unwrap_or_default());",
-              "",
-              "    if !state.initialized {",
-              "        state.initialized = true;",
-              "        apply_tablet_style(ctx, state.ui_scale);",
-              "    }",
-              "",
-              "    egui::Area::new(Id::new(\"tablet_bottom_dock\"))",
-              "        .order(Order::Foreground)",
-              "        .anchor(egui::Align2::CENTER_BOTTOM, Vec2::new(0.0, -34.0))",
-              "        .show(ctx, |ui| {",
-              "            egui::Frame::window(ui.style())",
-              "                .fill(Color32::from_rgba_unmultiplied(24, 26, 30, 242))",
-              "                .show(ui, |ui| {",
-              "                    ui.horizontal(|ui| {",
-              "                        let tools_btn = egui::Button::new(",
-              "                            RichText::new(\"Tools\").size(14.0).strong()",
-              "                        ).fill(if state.show_tools { Color32::from_rgb(0, 110, 180) } else { Color32::from_rgb(50, 52, 58) });",
-              "                        if ui.add(tools_btn).clicked() {",
-              "                            state.show_tools = !state.show_tools;",
-              "                        }",
-              "",
-              "                        let numpad_btn = egui::Button::new(",
-              "                            RichText::new(\"Numpad\").size(14.0).strong()",
-              "                        ).fill(if state.show_numpad { Color32::from_rgb(0, 110, 180) } else { Color32::from_rgb(50, 52, 58) });",
-              "                        if ui.add(numpad_btn).clicked() {",
-              "                            state.show_numpad = !state.show_numpad;",
-              "                        }",
-              "",
-              "                        ui.separator();",
-              "",
-              "                        if ui.button(RichText::new(\"Undo\").size(14.0)).clicked() {",
-              "                            exec_cmdline(app, ctx, \"u\");",
-              "                        }",
-              "                        if ui.button(RichText::new(\"Redo\").size(14.0)).clicked() {",
-              "                            exec_cmdline(app, ctx, \"redo\");",
-              "                        }",
-              "",
-              "                        ui.separator();",
-              "",
-              "                        if ui.button(RichText::new(\"Ortho\").size(13.0)).clicked() {",
-              "                            push_key(ctx, Key::F8);",
-              "                        }",
-              "                        if ui.button(RichText::new(\"Snap\").size(13.0)).clicked() {",
-              "                            push_key(ctx, Key::F3);",
-              "                        }",
-              "                        if ui.button(RichText::new(\"Grid\").size(13.0)).clicked() {",
-              "                            push_key(ctx, Key::F7);",
-              "                        }",
-              "                        if ui.button(RichText::new(\"Fit\").size(13.0)).clicked() {",
-              "                            exec_cmdline(app, ctx, \"zoom e\");",
-              "                        }",
-              "",
-              "                        ui.separator();",
-              "",
-              "                        let enter_btn = egui::Button::new(",
-              "                            RichText::new(\"ENTER\").size(14.0).strong().color(Color32::WHITE)",
-              "                        ).fill(Color32::from_rgb(28, 130, 55));",
-              "                        if ui.add(enter_btn).clicked() {",
-              "                            if state.numpad_buf.is_empty() {",
-              "                                exec_cmdline(app, ctx, \"\");",
-              "                                push_key(ctx, Key::Enter);",
-              "                            } else {",
-              "                                let cmd = state.numpad_buf.clone();",
-              "                                state.numpad_buf.clear();",
-              "                                exec_cmdline(app, ctx, &cmd);",
-              "                            }",
-              "                        }",
-              "",
-              "                        let esc_btn = egui::Button::new(",
-              "                            RichText::new(\"ESC\").size(14.0).strong().color(Color32::WHITE)",
-              "                        ).fill(Color32::from_rgb(175, 42, 42));",
-              "                        if ui.add(esc_btn).clicked() {",
-              "                            state.numpad_buf.clear();",
-              "                            push_key(ctx, Key::Escape);",
-              "                        }",
-              "",
-              "                        ui.separator();",
-              "",
-              "                        if ui.button(RichText::new(\"A-\").size(13.0)).clicked() {",
-              "                            state.ui_scale = (state.ui_scale - 0.1).max(0.85);",
-              "                            apply_tablet_style(ctx, state.ui_scale);",
-              "                        }",
-              "                        if ui.button(RichText::new(\"A+\").size(13.0)).clicked() {",
-              "                            state.ui_scale = (state.ui_scale + 0.1).min(1.75);",
-              "                            apply_tablet_style(ctx, state.ui_scale);",
-              "                        }",
-              "                    });",
-              "                });",
-              "        });",
-              "",
-              "    if state.show_numpad {",
-              "        Window::new(\"CAD Numpad & Coords\")",
-              "            .id(Id::new(\"tablet_numpad_win\"))",
-              "            .default_pos(egui::pos2(24.0, 420.0))",
-              "            .resizable(false)",
-              "            .collapsible(true)",
-              "            .order(Order::Foreground)",
-              "            .show(ctx, |ui| {",
-              "                ui.horizontal(|ui| {",
-              "                    let display_text = if state.numpad_buf.is_empty() {",
-              "                        \"Coord / dist / cmd...\".to_string()",
-              "                    } else {",
-              "                        state.numpad_buf.clone()",
-              "                    };",
-              "                    let text_color = if state.numpad_buf.is_empty() {",
-              "                        Color32::GRAY",
-              "                    } else {",
-              "                        Color32::from_rgb(0, 255, 128)",
-              "                    };",
-              "                    egui::Frame::canvas(ui.style())",
-              "                        .fill(Color32::from_rgb(15, 17, 20))",
-              "                        .show(ui, |ui| {",
-              "                            ui.set_min_width(165.0);",
-              "                            ui.label(RichText::new(display_text).monospace().size(16.0).color(text_color));",
-              "                        });",
-              "                    if ui.button(RichText::new(\"CLR\").size(13.0)).clicked() {",
-              "                        state.numpad_buf.clear();",
-              "                    }",
-              "                });",
-              "",
-              "                ui.add_space(4.0);",
-              "",
-              "                let rows: [[&str; 4]; 4] = [",
-              "                    [\"7\", \"8\", \"9\", \"@\"],",
-              "                    [\"4\", \"5\", \"6\", \"<\"],",
-              "                    [\"1\", \"2\", \"3\", \",\"],",
-              "                    [\"0\", \".\", \"-\", \"BKSP\"],",
-              "                ];",
-              "                for row in &rows {",
-              "                    ui.horizontal(|ui| {",
-              "                        for &key_label in row {",
-              "                            let btn = egui::Button::new(",
-              "                                RichText::new(key_label).monospace().size(16.0).strong()",
-              "                            ).min_size(Vec2::new(50.0, 42.0));",
-              "                            if ui.add(btn).clicked() {",
-              "                                if key_label == \"BKSP\" {",
-              "                                    if state.numpad_buf.pop().is_none() {",
-              "                                        push_key(ctx, Key::Backspace);",
-              "                                    }",
-              "                                } else {",
-              "                                    state.numpad_buf.push_str(key_label);",
-              "                                }",
-              "                            }",
-              "                        }",
-              "                    });",
-              "                }",
-              "",
-              "                ui.add_space(4.0);",
-              "",
-              "                ui.horizontal_wrapped(|ui| {",
-              "                    let chips = [",
-              "                        (\"Close\", \"c\"),",
-              "                        (\"Undo\", \"u\"),",
-              "                        (\"Radius\", \"r\"),",
-              "                        (\"Dia\", \"d\"),",
-              "                        (\"2P\", \"2p\"),",
-              "                        (\"3P\", \"3p\"),",
-              "                        (\"All\", \"all\"),",
-              "                    ];",
-              "                    for (label, kw) in chips {",
-              "                        if ui.button(RichText::new(label).size(12.0)).clicked() {",
-              "                            exec_cmdline(app, ctx, kw);",
-              "                        }",
-              "                    }",
-              "                });",
-              "",
-              "                ui.add_space(4.0);",
-              "",
-              "                ui.horizontal(|ui| {",
-              "                    let submit_btn = egui::Button::new(",
-              "                        RichText::new(\"SUBMIT / ENTER\").size(15.0).strong().color(Color32::WHITE)",
-              "                    )",
-              "                    .fill(Color32::from_rgb(28, 130, 55))",
-              "                    .min_size(Vec2::new(158.0, 42.0));",
-              "",
-              "                    if ui.add(submit_btn).clicked() {",
-              "                        if state.numpad_buf.is_empty() {",
-              "                            exec_cmdline(app, ctx, \"\");",
-              "                            push_key(ctx, Key::Enter);",
-              "                        } else {",
-              "                            let cmd = state.numpad_buf.clone();",
-              "                            state.numpad_buf.clear();",
-              "                            exec_cmdline(app, ctx, &cmd);",
-              "                        }",
-              "                    }",
-              "",
-              "                    let esc_btn = egui::Button::new(",
-              "                        RichText::new(\"ESC\").size(14.0).strong().color(Color32::WHITE)",
-              "                    )",
-              "                    .fill(Color32::from_rgb(175, 42, 42))",
-              "                    .min_size(Vec2::new(52.0, 42.0));",
-              "",
-              "                    if ui.add(esc_btn).clicked() {",
-              "                        state.numpad_buf.clear();",
-              "                        push_key(ctx, Key::Escape);",
-              "                    }",
-              "                });",
-              "            });",
-              "    }",
-              "",
-              "    if state.show_tools {",
-              "        Window::new(\"Tablet CAD Tools\")",
-              "            .id(Id::new(\"tablet_tools_win\"))",
-              "            .default_pos(egui::pos2(24.0, 60.0))",
-              "            .resizable(false)",
-              "            .collapsible(true)",
-              "            .order(Order::Foreground)",
-              "            .show(ctx, |ui| {",
-              "                ui.horizontal(|ui| {",
-              "                    if ui.selectable_label(state.active_tab == ToolTab::Draw, \"Draw\").clicked() {",
-              "                        state.active_tab = ToolTab::Draw;",
-              "                    }",
-              "                    if ui.selectable_label(state.active_tab == ToolTab::Modify, \"Modify\").clicked() {",
-              "                        state.active_tab = ToolTab::Modify;",
-              "                    }",
-              "                    if ui.selectable_label(state.active_tab == ToolTab::Annotate, \"Dim\").clicked() {",
-              "                        state.active_tab = ToolTab::Annotate;",
-              "                    }",
-              "                    if ui.selectable_label(state.active_tab == ToolTab::View, \"View\").clicked() {",
-              "                        state.active_tab = ToolTab::View;",
-              "                    }",
-              "                });",
-              "                ui.separator();",
-              "",
-              "                let tools: &[(&str, &str)] = match state.active_tab {",
-              "                    ToolTab::Draw => &[",
-              "                        (\"Line\", \"line\"), (\"PLine\", \"pline\"), (\"Rect\", \"rectang\"),",
-              "                        (\"Circle\", \"circle\"), (\"Arc\", \"arc\"), (\"Ellipse\", \"ellipse\"),",
-              "                        (\"Polygon\", \"polygon\"), (\"Spline\", \"spline\"), (\"Hatch\", \"hatch\"),",
-              "                        (\"Point\", \"point\"), (\"XLine\", \"xline\"), (\"Ray\", \"ray\"),",
-              "                    ],",
-              "                    ToolTab::Modify => &[",
-              "                        (\"Move\", \"move\"), (\"Copy\", \"copy\"), (\"Rotate\", \"rotate\"),",
-              "                        (\"Scale\", \"scale\"), (\"Mirror\", \"mirror\"), (\"Offset\", \"offset\"),",
-              "                        (\"Trim\", \"trim\"), (\"Extend\", \"extend\"), (\"Fillet\", \"fillet\"),",
-              "                        (\"Chamfer\", \"chamfer\"), (\"Explode\", \"explode\"), (\"Join\", \"join\"),",
-              "                        (\"Break\", \"break\"), (\"Array\", \"arrayrect\"), (\"Stretch\", \"stretch\"),",
-              "                        (\"Erase\", \"erase\"),",
-              "                    ],",
-              "                    ToolTab::Annotate => &[",
-              "                        (\"Dim Lin\", \"dimlinear\"), (\"Dim Align\", \"dimaligned\"), (\"Dim Ang\", \"dimangular\"),",
-              "                        (\"Dim Rad\", \"dimradius\"), (\"Dim Dia\", \"dimdiameter\"), (\"Text\", \"text\"),",
-              "                        (\"MText\", \"mtext\"), (\"Leader\", \"leader\"), (\"Dist\", \"dist\"), (\"Area\", \"area\"),",
-              "                    ],",
-              "                    ToolTab::View => &[",
-              "                        (\"Zoom Fit\", \"zoom e\"), (\"Zoom Win\", \"zoom w\"), (\"Zoom Prev\", \"zoom p\"),",
-              "                        (\"Regen\", \"regen\"), (\"Pan\", \"pan\"), (\"Export PDF\", \"exportpdf\"),",
-              "                        (\"Save DXF\", \"saveas\"), (\"Open DXF\", \"open\"),",
-              "                    ],",
-              "                };",
-              "",
-              "                egui::Grid::new(\"tablet_tool_grid\")",
-              "                    .spacing(Vec2::new(6.0, 6.0))",
-              "                    .show(ui, |ui| {",
-              "                        for (idx, &(label, cmd)) in tools.iter().enumerate() {",
-              "                            let btn = egui::Button::new(",
-              "                                RichText::new(label).size(13.5).strong()",
-              "                            ).min_size(Vec2::new(76.0, 38.0));",
-              "                            if ui.add(btn).clicked() {",
-              "                                if cmd.contains(' ') {",
-              "                                    exec_cmdline(app, ctx, cmd);",
-              "                                } else {",
-              "                                    exec_start(app, ctx, cmd);",
-              "                                }",
-              "                            }",
-              "                            if idx % 3 == 2 {",
-              "                                ui.end_row();",
-              "                            }",
-              "                        }",
-              "                    });",
-              "            });",
-              "    }",
-              "",
-              "    ctx.data_mut(|d| d.insert_temp(state_id, state));",
-              "}",
-          ]
+          tablet_code = r'''//! Tablet Edition Native Touch & Stylus Interface for CADCraft
+          use egui::{
+              epaint::PathShape, Color32, Context, Event, Id, Key, Modifiers, Order, Pos2, Rect, RichText,
+              Sense, Stroke, Theme, Vec2, Window,
+          };
+          use crate::CadApp;
+          use std::f32::consts::PI;
+
+          #[derive(Clone, Copy, PartialEq, Eq)]
+          pub enum ToolTab {
+              Draw,
+              Modify,
+              Annotate,
+              View,
+          }
+
+          #[derive(Clone, Copy, PartialEq, Eq)]
+          pub enum KeyboardTab {
+              Qwerty,
+              NumpadCoords,
+          }
+
+          #[derive(Clone)]
+          pub struct TabletState {
+              pub initialized: bool,
+              pub ui_scale: f32,
+
+              // Movable Action Dock
+              pub dock_pos: Pos2,
+              pub dock_collapsed: bool,
+
+              // Panels
+              pub show_tools: bool,
+              pub show_keyboard: bool,
+              pub show_history: bool,
+              pub active_tool_tab: ToolTab,
+
+              // Radial Menu
+              pub show_radial: bool,
+              pub radial_pos: Pos2,
+
+              // Keyboard & Command Line
+              pub keyboard_tab: KeyboardTab,
+              pub caps_lock: bool,
+              pub cmd_buffer: String,
+          }
+
+          impl Default for TabletState {
+              fn default() -> Self {
+                  Self {
+                      initialized: false,
+                      ui_scale: 1.0, // Scale 1.0 ensures top menu bar fits without clipping
+                      dock_pos: Pos2::new(260.0, 720.0),
+                      dock_collapsed: false,
+                      show_tools: false,
+                      show_keyboard: false,
+                      show_history: false,
+                      active_tool_tab: ToolTab::Draw,
+                      show_radial: false,
+                      radial_pos: Pos2::new(640.0, 420.0),
+                      keyboard_tab: KeyboardTab::Qwerty,
+                      caps_lock: false,
+                      cmd_buffer: String::new(),
+                  }
+              }
+          }
+
+          fn apply_tablet_style(ctx: &Context, scale: f32) {
+              ctx.set_zoom_factor(scale);
+              for theme in [Theme::Dark, Theme::Light] {
+                  ctx.style_mut_of(theme, |style| {
+                      style.spacing.interact_size = Vec2::new(38.0, 32.0);
+                      style.spacing.button_padding = Vec2::new(8.0, 6.0);
+                      style.spacing.item_spacing = Vec2::new(5.0, 5.0);
+                      style.spacing.menu_margin = egui::Margin::same(6.0);
+                  });
+              }
+          }
+
+          fn push_key(ctx: &Context, key: Key) {
+              ctx.input_mut(|i| {
+                  i.events.push(Event::Key {
+                      key,
+                      physical_key: Some(key),
+                      pressed: true,
+                      repeat: false,
+                      modifiers: Modifiers::NONE,
+                  });
+                  i.events.push(Event::Key {
+                      key,
+                      physical_key: Some(key),
+                      pressed: false,
+                      repeat: false,
+                      modifiers: Modifiers::NONE,
+                  });
+              });
+          }
+
+          fn push_right_click(ctx: &Context, pos: Pos2) {
+              ctx.input_mut(|i| {
+                  i.events.push(Event::PointerButton {
+                      pos,
+                      button: egui::PointerButton::Secondary,
+                      pressed: true,
+                      modifiers: Modifiers::NONE,
+                  });
+                  i.events.push(Event::PointerButton {
+                      pos,
+                      button: egui::PointerButton::Secondary,
+                      pressed: false,
+                      modifiers: Modifiers::NONE,
+                  });
+              });
+          }
+
+          fn exec_cmdline(app: &mut CadApp, _ctx: &Context, cmd: &str) {
+              let _ = app.cmdline(cmd);
+          }
+
+          fn exec_start(app: &mut CadApp, _ctx: &Context, id: &str) {
+              app.start(id);
+          }
+
+          pub fn update(app: &mut CadApp, ctx: &Context) {
+              let state_id = Id::new("cadcraft_tablet_state_v2");
+              let mut state = ctx.data_mut(|d| d.get_temp::<TabletState>(state_id).unwrap_or_default());
+
+              if !state.initialized {
+                  state.initialized = true;
+                  apply_tablet_style(ctx, state.ui_scale);
+              }
+
+              // Collapse desktop history popup to keep center canvas clear
+              if !state.show_history {
+                  app.ui.cmd.expanded = false;
+              }
+
+              // -------------------------------------------------------------
+              // 1. MOVABLE ACTION DOCK
+              // -------------------------------------------------------------
+              if state.dock_collapsed {
+                  Window::new("cad_dock_mini")
+                      .id(Id::new("cad_tablet_dock_mini"))
+                      .default_pos(state.dock_pos)
+                      .title_bar(false)
+                      .resizable(false)
+                      .collapsible(false)
+                      .order(Order::Foreground)
+                      .frame(
+                          egui::Frame::window(&ctx.style())
+                              .fill(Color32::from_rgba_unmultiplied(22, 24, 28, 235))
+                              .stroke(Stroke::new(1.0, Color32::from_rgb(0, 140, 230)))
+                              .corner_radius(18.0)
+                              .inner_margin(egui::Margin::symmetric(12.0, 8.0)),
+                      )
+                      .show(ctx, |ui| {
+                          if ui.button(RichText::new("⚡ CAD Tools").size(14.0).strong().color(Color32::from_rgb(0, 200, 255))).clicked() {
+                              state.dock_collapsed = false;
+                          }
+                      });
+              } else {
+                  Window::new("⚡ CAD Dock")
+                      .id(Id::new("cad_tablet_dock_win"))
+                      .default_pos(state.dock_pos)
+                      .resizable(false)
+                      .collapsible(false)
+                      .order(Order::Foreground)
+                      .frame(
+                          egui::Frame::window(&ctx.style())
+                              .fill(Color32::from_rgba_unmultiplied(20, 22, 26, 245))
+                              .stroke(Stroke::new(1.0, Color32::from_rgb(55, 60, 70)))
+                              .corner_radius(10.0)
+                              .inner_margin(egui::Margin::symmetric(10.0, 6.0)),
+                      )
+                      .show(ctx, |ui| {
+                          ui.horizontal(|ui| {
+                              if ui.button(RichText::new("—").size(13.0).color(Color32::GRAY)).on_hover_text("Minimize dock").clicked() {
+                                  state.dock_collapsed = true;
+                              }
+
+                              ui.separator();
+
+                              let tools_btn = egui::Button::new(RichText::new("Tools").size(13.5).strong())
+                                  .fill(if state.show_tools { Color32::from_rgb(0, 110, 180) } else { Color32::from_rgb(45, 48, 54) });
+                              if ui.add(tools_btn).clicked() {
+                                  state.show_tools = !state.show_tools;
+                              }
+
+                              let kb_btn = egui::Button::new(RichText::new("⌨ Keybd").size(13.5).strong())
+                                  .fill(if state.show_keyboard { Color32::from_rgb(0, 110, 180) } else { Color32::from_rgb(45, 48, 54) });
+                              if ui.add(kb_btn).clicked() {
+                                  state.show_keyboard = !state.show_keyboard;
+                              }
+
+                              let rad_btn = egui::Button::new(RichText::new("◎ Radial").size(13.5).strong().color(Color32::from_rgb(0, 240, 255)))
+                                  .fill(if state.show_radial { Color32::from_rgb(0, 90, 150) } else { Color32::from_rgb(45, 48, 54) });
+                              if ui.add(rad_btn).clicked() {
+                                  state.show_radial = !state.show_radial;
+                                  if state.show_radial {
+                                      state.radial_pos = Pos2::new(
+                                          ctx.screen_rect().center().x,
+                                          ctx.screen_rect().center().y,
+                                      );
+                                  }
+                              }
+
+                              ui.separator();
+
+                              if ui.button(RichText::new("↶ Undo").size(13.5)).clicked() {
+                                  exec_cmdline(app, ctx, "u");
+                              }
+                              if ui.button(RichText::new("↷ Redo").size(13.5)).clicked() {
+                                  exec_cmdline(app, ctx, "redo");
+                              }
+
+                              ui.separator();
+
+                              if ui.button(RichText::new("Ortho").size(13.0)).clicked() {
+                                  push_key(ctx, Key::F8);
+                              }
+                              if ui.button(RichText::new("Snap").size(13.0)).clicked() {
+                                  push_key(ctx, Key::F3);
+                              }
+                              if ui.button(RichText::new("Grid").size(13.0)).clicked() {
+                                  push_key(ctx, Key::F7);
+                              }
+                              if ui.button(RichText::new("Fit").size(13.0)).clicked() {
+                                  exec_cmdline(app, ctx, "zoom e");
+                              }
+
+                              ui.separator();
+
+                              let rclick_btn = egui::Button::new(RichText::new("🖱 R-Click").size(13.5).strong())
+                                  .fill(Color32::from_rgb(70, 75, 110));
+                              if ui.add(rclick_btn).on_hover_text("Trigger CAD Context Menu / Enter").clicked() {
+                                  let center_pt = ctx.screen_rect().center();
+                                  push_right_click(ctx, center_pt);
+                              }
+
+                              let hist_btn = egui::Button::new(RichText::new("Hist").size(12.5))
+                                  .fill(if state.show_history { Color32::from_rgb(90, 70, 30) } else { Color32::from_rgb(45, 48, 54) });
+                              if ui.add(hist_btn).on_hover_text("Toggle Command History Drawer").clicked() {
+                                  state.show_history = !state.show_history;
+                                  app.ui.cmd.expanded = state.show_history;
+                              }
+
+                              ui.separator();
+
+                              let enter_btn = egui::Button::new(RichText::new("ENTER").size(14.0).strong().color(Color32::WHITE))
+                                  .fill(Color32::from_rgb(28, 140, 60));
+                              if ui.add(enter_btn).clicked() {
+                                  if state.cmd_buffer.is_empty() {
+                                      push_key(ctx, Key::Enter);
+                                  } else {
+                                      let cmd = state.cmd_buffer.clone();
+                                      state.cmd_buffer.clear();
+                                      exec_cmdline(app, ctx, &cmd);
+                                  }
+                              }
+
+                              let esc_btn = egui::Button::new(RichText::new("ESC").size(14.0).strong().color(Color32::WHITE))
+                                  .fill(Color32::from_rgb(180, 40, 40));
+                              if ui.add(esc_btn).clicked() {
+                                  state.cmd_buffer.clear();
+                                  push_key(ctx, Key::Escape);
+                              }
+
+                              ui.separator();
+
+                              if ui.button(RichText::new("A-").size(12.0)).clicked() {
+                                  state.ui_scale = (state.ui_scale - 0.05).max(0.85);
+                                  apply_tablet_style(ctx, state.ui_scale);
+                              }
+                              if ui.button(RichText::new("A+").size(12.0)).clicked() {
+                                  state.ui_scale = (state.ui_scale + 0.05).min(1.50);
+                                  apply_tablet_style(ctx, state.ui_scale);
+                              }
+                          });
+                      });
+              }
+
+              // -------------------------------------------------------------
+              // 2. RADIAL STYLUS MENU (Pie Menu)
+              // -------------------------------------------------------------
+              if state.show_radial {
+                  let center = state.radial_pos;
+                  let r_inner = 38.0_f32;
+                  let r_outer = 118.0_f32;
+                  let bounding_rect = Rect::from_center_size(center, Vec2::splat(r_outer * 2.0 + 20.0));
+
+                  egui::Area::new(Id::new("cad_tablet_radial_menu"))
+                      .order(Order::Foreground)
+                      .fixed_pos(bounding_rect.min)
+                      .show(ctx, |ui| {
+                          let (response, painter) = ui.allocate_painter(bounding_rect.size(), Sense::click_and_drag());
+                          let ptr_opt = ctx.input(|i| i.pointer.hover_pos());
+
+                          let slices: [(&str, &str); 8] = [
+                              ("LINE", "line"),
+                              ("CIRCLE", "circle"),
+                              ("TRIM", "trim"),
+                              ("ERASE", "erase"),
+                              ("UNDO", "u"),
+                              ("FIT", "zoom e"),
+                              ("DIM", "dimlinear"),
+                              ("ORTHO", "ortho"),
+                          ];
+
+                          let mut hovered_slice: Option<usize> = None;
+                          let mut center_hovered = false;
+
+                          if let Some(ptr) = ptr_opt {
+                              let d = (ptr - center).length();
+                              if d < r_inner {
+                                  center_hovered = true;
+                              } else if d >= r_inner && d <= r_outer + 12.0 {
+                                  let ang = (ptr.y - center.y).atan2(ptr.x - center.x);
+                                  let rel = (ang + PI / 2.0 + PI / 8.0).rem_euclid(2.0 * PI);
+                                  let idx = (rel / (PI / 4.0)).floor() as usize;
+                                  if idx < 8 {
+                                      hovered_slice = Some(idx);
+                                  }
+                              }
+                          }
+
+                          for i in 0..8 {
+                              let is_hov = hovered_slice == Some(i);
+                              let a_mid = -PI / 2.0 + (i as f32) * (PI / 4.0);
+                              let a1 = a_mid - PI / 8.0;
+                              let a2 = a_mid + PI / 8.0;
+
+                              let steps = 6;
+                              let mut pts = Vec::with_capacity((steps + 1) * 2);
+                              for s in 0..=steps {
+                                  let t = a1 + (a2 - a1) * (s as f32 / steps as f32);
+                                  pts.push(center + Vec2::new(r_outer * t.cos(), r_outer * t.sin()));
+                              }
+                              for s in (0..=steps).rev() {
+                                  let t = a1 + (a2 - a1) * (s as f32 / steps as f32);
+                                  pts.push(center + Vec2::new(r_inner * t.cos(), r_inner * t.sin()));
+                              }
+
+                              let fill_col = if is_hov {
+                                  Color32::from_rgb(0, 130, 220)
+                              } else {
+                                  Color32::from_rgba_unmultiplied(26, 28, 34, 235)
+                              };
+                              let stroke_col = if is_hov {
+                                  Color32::from_rgb(100, 200, 255)
+                              } else {
+                                  Color32::from_rgb(60, 65, 75)
+                              };
+
+                              painter.add(PathShape::convex_polygon(pts, fill_col, Stroke::new(1.2, stroke_col)));
+
+                              let text_r = (r_inner + r_outer) * 0.5;
+                              let text_pos = center + Vec2::new(text_r * a_mid.cos(), text_r * a_mid.sin() - 6.0);
+                              painter.text(
+                                  text_pos,
+                                  egui::Align2::CENTER_CENTER,
+                                  slices[i].0,
+                                  egui::FontId::proportional(12.5),
+                                  if is_hov { Color32::WHITE } else { Color32::from_rgb(220, 225, 230) },
+                              );
+                          }
+
+                          let center_fill = if center_hovered {
+                              Color32::from_rgb(220, 50, 50)
+                          } else {
+                              Color32::from_rgb(170, 40, 40)
+                          };
+                          painter.circle(center, r_inner, center_fill, Stroke::new(1.5, Color32::WHITE));
+                          painter.text(
+                              center,
+                              egui::Align2::CENTER_CENTER,
+                              "✕ ESC",
+                              egui::FontId::proportional(13.0),
+                              Color32::WHITE,
+                          );
+
+                          if response.clicked() || ctx.input(|i| i.pointer.primary_clicked()) {
+                              if center_hovered {
+                                  state.cmd_buffer.clear();
+                                  push_key(ctx, Key::Escape);
+                                  state.show_radial = false;
+                              } else if let Some(idx) = hovered_slice {
+                                  let cmd = slices[idx].1;
+                                  state.show_radial = false;
+                                  if cmd == "ortho" {
+                                      push_key(ctx, Key::F8);
+                                  } else if cmd.contains(' ') {
+                                      exec_cmdline(app, ctx, cmd);
+                                  } else {
+                                      exec_start(app, ctx, cmd);
+                                  }
+                              } else if let Some(ptr) = ptr_opt {
+                                  if (ptr - center).length() > r_outer + 15.0 {
+                                      state.show_radial = false;
+                                  }
+                              }
+                          }
+                      });
+              }
+
+              // -------------------------------------------------------------
+              // 3. FULL TABLET CAD KEYBOARD & COMMAND PROMPT
+              // -------------------------------------------------------------
+              if state.show_keyboard {
+                  Window::new("⌨ CAD Command & Virtual Keyboard")
+                      .id(Id::new("cad_tablet_keyboard_win"))
+                      .default_pos(Pos2::new(280.0, 450.0))
+                      .resizable(false)
+                      .collapsible(true)
+                      .order(Order::Foreground)
+                      .show(ctx, |ui| {
+                          ui.horizontal(|ui| {
+                              let display_text = if state.cmd_buffer.is_empty() {
+                                  "Type command, alias (e.g. L, C), distance, coordinate...".to_string()
+                              } else {
+                                  state.cmd_buffer.clone()
+                              };
+                              let text_color = if state.cmd_buffer.is_empty() {
+                                  Color32::GRAY
+                              } else {
+                                  Color32::from_rgb(0, 255, 130)
+                              };
+
+                              egui::Frame::canvas(ui.style())
+                                  .fill(Color32::from_rgb(14, 16, 20))
+                                  .stroke(Stroke::new(1.0, Color32::from_rgb(50, 55, 65)))
+                                  .inner_margin(egui::Margin::symmetric(10.0, 7.0))
+                                  .show(ui, |ui| {
+                                      ui.set_min_width(320.0);
+                                      ui.label(RichText::new(display_text).monospace().size(15.0).color(text_color));
+                                  });
+
+                              if ui.button(RichText::new("CLR").size(13.0)).clicked() {
+                                  state.cmd_buffer.clear();
+                              }
+
+                              let enter_btn = egui::Button::new(RichText::new("SUBMIT ↵").size(14.0).strong().color(Color32::WHITE))
+                                  .fill(Color32::from_rgb(25, 140, 55))
+                                  .min_size(Vec2::new(95.0, 32.0));
+                              if ui.add(enter_btn).clicked() {
+                                  if state.cmd_buffer.is_empty() {
+                                      push_key(ctx, Key::Enter);
+                                  } else {
+                                      let cmd = state.cmd_buffer.clone();
+                                      state.cmd_buffer.clear();
+                                      exec_cmdline(app, ctx, &cmd);
+                                  }
+                              }
+                          });
+
+                          ui.add_space(3.0);
+
+                          let all_cmds: &[(&str, &str)] = &[
+                              ("LINE", "line"), ("PLINE", "pline"), ("RECTANG", "rectang"), ("CIRCLE", "circle"),
+                              ("ARC", "arc"), ("TRIM", "trim"), ("EXTEND", "extend"), ("ERASE", "erase"),
+                              ("MOVE", "move"), ("COPY", "copy"), ("ROTATE", "rotate"), ("SCALE", "scale"),
+                              ("MIRROR", "mirror"), ("OFFSET", "offset"), ("FILLET", "fillet"), ("DIMLIN", "dimlinear"),
+                              ("DIST", "dist"), ("ZOOM", "zoom e"), ("REGEN", "regen"), ("CLOSE", "c"),
+                          ];
+
+                          let query = state.cmd_buffer.trim().to_lowercase();
+                          let matching_cmds: Vec<&(&str, &str)> = all_cmds
+                              .iter()
+                              .filter(|(label, id)| {
+                                  if query.is_empty() {
+                                      true
+                                  } else {
+                                      label.to_lowercase().starts_with(&query) || id.starts_with(&query)
+                                  }
+                              })
+                              .take(6)
+                              .collect();
+
+                          ui.horizontal_wrapped(|ui| {
+                              ui.label(RichText::new("Suggestions:").small().color(Color32::GRAY));
+                              for (label, id) in matching_cmds {
+                                  let btn = egui::Button::new(RichText::new(*label).size(12.0).strong())
+                                      .fill(Color32::from_rgb(38, 42, 50));
+                                  if ui.add(btn).clicked() {
+                                      exec_start(app, ctx, id);
+                                      state.cmd_buffer.clear();
+                                  }
+                              }
+                          });
+
+                          ui.separator();
+
+                          ui.horizontal(|ui| {
+                              if ui.selectable_label(state.keyboard_tab == KeyboardTab::Qwerty, "ABC Keyboard").clicked() {
+                                  state.keyboard_tab = KeyboardTab::Qwerty;
+                              }
+                              if ui.selectable_label(state.keyboard_tab == KeyboardTab::NumpadCoords, "123 / Coords & Osnap").clicked() {
+                                  state.keyboard_tab = KeyboardTab::NumpadCoords;
+                              }
+                          });
+
+                          ui.add_space(4.0);
+
+                          match state.keyboard_tab {
+                              KeyboardTab::Qwerty => {
+                                  let row1 = ["Q", "W", "E", "R", "T", "Y", "U", "I", "O", "P"];
+                                  let row2 = ["A", "S", "D", "F", "G", "H", "J", "K", "L"];
+                                  let row3 = ["Z", "X", "C", "V", "B", "N", "M", ",", "@", "<"];
+
+                                  ui.horizontal(|ui| {
+                                      for &ch in &row1 {
+                                          let key_text = if state.caps_lock { ch.to_uppercase() } else { ch.to_lowercase() };
+                                          let btn = egui::Button::new(RichText::new(&key_text).size(15.0).strong())
+                                              .min_size(Vec2::new(42.0, 36.0));
+                                          if ui.add(btn).clicked() {
+                                              state.cmd_buffer.push_str(&key_text);
+                                          }
+                                      }
+                                  });
+
+                                  ui.horizontal(|ui| {
+                                      ui.add_space(14.0);
+                                      for &ch in &row2 {
+                                          let key_text = if state.caps_lock { ch.to_uppercase() } else { ch.to_lowercase() };
+                                          let btn = egui::Button::new(RichText::new(&key_text).size(15.0).strong())
+                                              .min_size(Vec2::new(42.0, 36.0));
+                                          if ui.add(btn).clicked() {
+                                              state.cmd_buffer.push_str(&key_text);
+                                          }
+                                      }
+                                  });
+
+                                  ui.horizontal(|ui| {
+                                      let caps_btn = egui::Button::new(RichText::new("⇧").size(15.0).strong())
+                                          .fill(if state.caps_lock { Color32::from_rgb(0, 120, 200) } else { Color32::from_rgb(50, 54, 62) })
+                                          .min_size(Vec2::new(38.0, 36.0));
+                                      if ui.add(caps_btn).clicked() {
+                                          state.caps_lock = !state.caps_lock;
+                                      }
+
+                                      for &ch in &row3 {
+                                          let key_text = if state.caps_lock { ch.to_uppercase() } else { ch.to_lowercase() };
+                                          let btn = egui::Button::new(RichText::new(&key_text).size(15.0).strong())
+                                              .min_size(Vec2::new(38.0, 36.0));
+                                          if ui.add(btn).clicked() {
+                                              state.cmd_buffer.push_str(&key_text);
+                                          }
+                                      }
+
+                                      let bksp_btn = egui::Button::new(RichText::new("⌫").size(16.0).strong())
+                                          .fill(Color32::from_rgb(65, 50, 50))
+                                          .min_size(Vec2::new(46.0, 36.0));
+                                      if ui.add(bksp_btn).clicked() {
+                                          if state.cmd_buffer.pop().is_none() {
+                                              push_key(ctx, Key::Backspace);
+                                          }
+                                      }
+                                  });
+
+                                  ui.horizontal(|ui| {
+                                      let sp_btn = egui::Button::new(RichText::new("SPACE").size(14.0).strong())
+                                          .min_size(Vec2::new(160.0, 36.0));
+                                      if ui.add(sp_btn).clicked() {
+                                          state.cmd_buffer.push(' ');
+                                      }
+
+                                      for &sym in &[".", "-", "/", "0", "1", "2"] {
+                                          let btn = egui::Button::new(RichText::new(sym).size(14.0).strong())
+                                              .min_size(Vec2::new(36.0, 36.0));
+                                          if ui.add(btn).clicked() {
+                                              state.cmd_buffer.push_str(sym);
+                                          }
+                                      }
+                                  });
+                              }
+                              KeyboardTab::NumpadCoords => {
+                                  let rows: [[&str; 4]; 4] = [
+                                      ["7", "8", "9", "@"],
+                                      ["4", "5", "6", "<"],
+                                      ["1", "2", "3", ","],
+                                      ["0", ".", "-", "BKSP"],
+                                  ];
+                                  for row in &rows {
+                                      ui.horizontal(|ui| {
+                                          for &k in row {
+                                              let btn = egui::Button::new(RichText::new(k).monospace().size(16.0).strong())
+                                                  .min_size(Vec2::new(60.0, 38.0));
+                                              if ui.add(btn).clicked() {
+                                                  if k == "BKSP" {
+                                                      if state.cmd_buffer.pop().is_none() {
+                                                          push_key(ctx, Key::Backspace);
+                                                      }
+                                                  } else {
+                                                      state.cmd_buffer.push_str(k);
+                                                  }
+                                              }
+                                          }
+                                      });
+                                  }
+
+                                  ui.add_space(4.0);
+
+                                  ui.horizontal_wrapped(|ui| {
+                                      let chips = [
+                                          ("@0,0", "@0,0"), ("@10<0", "@10<0"), ("Close", "c"),
+                                          ("Undo", "u"), ("Radius", "r"), ("Dia", "d"), ("2P", "2p"),
+                                      ];
+                                      for (label, kw) in chips {
+                                          if ui.button(RichText::new(label).size(12.5)).clicked() {
+                                              exec_cmdline(app, ctx, kw);
+                                          }
+                                      }
+                                  });
+                              }
+                          }
+                      });
+              }
+
+              // -------------------------------------------------------------
+              // 4. CONTROLLED COMMAND HISTORY DRAWER
+              // -------------------------------------------------------------
+              if state.show_history {
+                  Window::new("Command History Log")
+                      .id(Id::new("tablet_history_log_win"))
+                      .default_pos(Pos2::new(320.0, 240.0))
+                      .default_size(Vec2::new(450.0, 220.0))
+                      .resizable(true)
+                      .collapsible(false)
+                      .order(Order::Foreground)
+                      .show(ctx, |ui| {
+                          ui.horizontal(|ui| {
+                              ui.label(RichText::new("Session Command History").strong());
+                              ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                                  if ui.button(RichText::new("Close ✕").size(13.0).color(Color32::WHITE))
+                                      .fill(Color32::from_rgb(160, 40, 40))
+                                      .clicked()
+                                  {
+                                      state.show_history = false;
+                                      app.ui.cmd.expanded = false;
+                                  }
+                              });
+                          });
+                          ui.separator();
+                          egui::ScrollArea::vertical()
+                              .stick_to_bottom(true)
+                              .show(ui, |ui| {
+                                  for line in app.ui.cmd.history.iter().rev().take(30).rev() {
+                                      ui.label(RichText::new(line).monospace().size(13.0).color(Color32::from_rgb(200, 210, 225)));
+                                  }
+                              });
+                      });
+              }
+
+              // -------------------------------------------------------------
+              // 5. TABLET CAD TOOLS PALETTE
+              // -------------------------------------------------------------
+              if state.show_tools {
+                  Window::new("Tablet CAD Tools")
+                      .id(Id::new("tablet_tools_win"))
+                      .default_pos(Pos2::new(24.0, 60.0))
+                      .resizable(false)
+                      .collapsible(true)
+                      .order(Order::Foreground)
+                      .show(ctx, |ui| {
+                          ui.horizontal(|ui| {
+                              if ui.selectable_label(state.active_tool_tab == ToolTab::Draw, "Draw").clicked() {
+                                  state.active_tool_tab = ToolTab::Draw;
+                              }
+                              if ui.selectable_label(state.active_tool_tab == ToolTab::Modify, "Modify").clicked() {
+                                  state.active_tool_tab = ToolTab::Modify;
+                              }
+                              if ui.selectable_label(state.active_tool_tab == ToolTab::Annotate, "Dim").clicked() {
+                                  state.active_tool_tab = ToolTab::Annotate;
+                              }
+                              if ui.selectable_label(state.active_tool_tab == ToolTab::View, "View").clicked() {
+                                  state.active_tool_tab = ToolTab::View;
+                              }
+                          });
+                          ui.separator();
+
+                          let tools: &[(&str, &str)] = match state.active_tool_tab {
+                              ToolTab::Draw => &[
+                                  ("Line", "line"), ("PLine", "pline"), ("Rect", "rectang"),
+                                  ("Circle", "circle"), ("Arc", "arc"), ("Ellipse", "ellipse"),
+                                  ("Polygon", "polygon"), ("Spline", "spline"), ("Hatch", "hatch"),
+                                  ("Point", "point"), ("XLine", "xline"), ("Ray", "ray"),
+                              ],
+                              ToolTab::Modify => &[
+                                  ("Move", "move"), ("Copy", "copy"), ("Rotate", "rotate"),
+                                  ("Scale", "scale"), ("Mirror", "mirror"), ("Offset", "offset"),
+                                  ("Trim", "trim"), ("Extend", "extend"), ("Fillet", "fillet"),
+                                  ("Chamfer", "chamfer"), ("Explode", "explode"), ("Join", "join"),
+                                  ("Break", "break"), ("Array", "arrayrect"), ("Stretch", "stretch"),
+                                  ("Erase", "erase"),
+                              ],
+                              ToolTab::Annotate => &[
+                                  ("Dim Lin", "dimlinear"), ("Dim Align", "dimaligned"), ("Dim Ang", "dimangular"),
+                                  ("Dim Rad", "dimradius"), ("Dim Dia", "dimdiameter"), ("Text", "text"),
+                                  ("MText", "mtext"), ("Leader", "leader"), ("Dist", "dist"), ("Area", "area"),
+                              ],
+                              ToolTab::View => &[
+                                  ("Zoom Fit", "zoom e"), ("Zoom Win", "zoom w"), ("Zoom Prev", "zoom p"),
+                                  ("Regen", "regen"), ("Pan", "pan"), ("Export PDF", "exportpdf"),
+                                  ("Save DXF", "saveas"), ("Open DXF", "open"),
+                              ],
+                          };
+
+                          egui::Grid::new("tablet_tool_grid")
+                              .spacing(Vec2::new(6.0, 6.0))
+                              .show(ui, |ui| {
+                                  for (idx, &(label, cmd)) in tools.iter().enumerate() {
+                                      let btn = egui::Button::new(RichText::new(label).size(13.5).strong())
+                                          .min_size(Vec2::new(76.0, 38.0));
+                                      if ui.add(btn).clicked() {
+                                          if cmd.contains(' ') {
+                                              exec_cmdline(app, ctx, cmd);
+                                          } else {
+                                              exec_start(app, ctx, cmd);
+                                          }
+                                      }
+                                      if idx % 3 == 2 {
+                                          ui.end_row();
+                                      }
+                                  }
+                              });
+                      });
+              }
+
+              ctx.data_mut(|d| d.insert_temp(state_id, state));
+          }
+          '''
 
           with open(os.path.join(ui_src, "tablet.rs"), "w", encoding="utf-8") as f:
-              f.write("\n".join(tablet_lines) + "\n")
+              f.write(tablet_code)
 
           with open(lib_rs_path, "r", encoding="utf-8") as f:
               lib_rs = f.read()
@@ -434,11 +813,22 @@ jobs:
           trunk build --release --dist ${{ github.workspace }}/www
           find ${{ github.workspace }}/www -type f \( -name "*.gz" -o -name "*.br" \) -delete
 
-      - name: Inject Android PDF/DXF/SVG Export Handler into index.html
+      - name: Inject Multi-Touch, Stylus Palm Rejection & Export Handlers into index.html
         shell: python3 {0}
         run: |
           inject_lines = [
               '<style>',
+              '  html, body {',
+              '    margin: 0; padding: 0; width: 100vw; height: 100vh;',
+              '    overflow: hidden; position: fixed;',
+              '    touch-action: none; -webkit-touch-callout: none;',
+              '    -webkit-user-select: none; user-select: none;',
+              '    background-color: #1a1c20;',
+              '  }',
+              '  canvas {',
+              '    display: block; width: 100% !important; height: 100% !important;',
+              '    touch-action: none;',
+              '  }',
               '  #cad-toast {',
               '    position: fixed; top: 16px; left: 50%; transform: translateX(-50%);',
               '    z-index: 2147483647; background: #1b5e20; color: #fff;',
@@ -457,6 +847,207 @@ jobs:
               '    clearTimeout(window._cadToastTimer);',
               '    window._cadToastTimer = setTimeout(function() { t.style.display = "none"; }, 4500);',
               '  }',
+              '',
+              '  // -------------------------------------------------------------',
+              '  // MULTI-TOUCH, TWO-FINGER PAN, PINCH-ZOOM, STYLUS & PALM REJECTION',
+              '  // -------------------------------------------------------------',
+              '  (function() {',
+              '    var canvas = null;',
+              '    function getCanvas() {',
+              '      if (!canvas) canvas = document.querySelector("canvas");',
+              '      return canvas;',
+              '    }',
+              '',
+              '    var activeTouches = new Map();',
+              '    var isStylusDown = false;',
+              '    var panState = null;',
+              '    var longPressTimer = null;',
+              '    var twoFingerTapCandidate = false;',
+              '    var twoFingerStartTime = 0;',
+              '',
+              '    function triggerRightClick(x, y) {',
+              '      var c = getCanvas();',
+              '      if (!c) return;',
+              '      if (navigator.vibrate) try { navigator.vibrate(35); } catch(e){}',
+              '      var downEvt = new PointerEvent("pointerdown", {',
+              '        clientX: x, clientY: y, button: 2, buttons: 2, bubbles: true, cancelable: true, pointerType: "mouse"',
+              '      });',
+              '      var upEvt = new PointerEvent("pointerup", {',
+              '        clientX: x, clientY: y, button: 2, buttons: 0, bubbles: true, cancelable: true, pointerType: "mouse"',
+              '      });',
+              '      c.dispatchEvent(downEvt);',
+              '      c.dispatchEvent(upEvt);',
+              '    }',
+              '',
+              '    document.addEventListener("contextmenu", function(e) {',
+              '      if (e.target && e.target.tagName === "CANVAS") e.preventDefault();',
+              '    }, { capture: true, passive: false });',
+              '',
+              '    window.addEventListener("pointerdown", function(e) {',
+              '      var c = getCanvas();',
+              '      if (!c || (e.target !== c && !c.contains(e.target))) return;',
+              '',
+              '      if (e.pointerType === "pen") {',
+              '        isStylusDown = true;',
+              '        if (e.button === 2 || e.buttons === 2) {',
+              '          triggerRightClick(e.clientX, e.clientY);',
+              '          return;',
+              '        }',
+              '        clearTimeout(longPressTimer);',
+              '        var sx = e.clientX, sy = e.clientY;',
+              '        longPressTimer = setTimeout(function() {',
+              '          if (isStylusDown) triggerRightClick(sx, sy);',
+              '        }, 480);',
+              '        return;',
+              '      }',
+              '',
+              '      if (e.pointerType === "touch") {',
+              '        // Palm rejection: ignore finger touch if stylus is actively contacting the canvas',
+              '        if (isStylusDown) {',
+              '          e.preventDefault();',
+              '          e.stopImmediatePropagation();',
+              '          return;',
+              '        }',
+              '',
+              '        activeTouches.set(e.pointerId, {',
+              '          x: e.clientX, y: e.clientY, startX: e.clientX, startY: e.clientY, time: Date.now()',
+              '        });',
+              '',
+              '        if (activeTouches.size === 1) {',
+              '          var fx = e.clientX, fy = e.clientY;',
+              '          clearTimeout(longPressTimer);',
+              '          longPressTimer = setTimeout(function() {',
+              '            if (activeTouches.size === 1) triggerRightClick(fx, fy);',
+              '          }, 500);',
+              '        } else if (activeTouches.size === 2) {',
+              '          clearTimeout(longPressTimer);',
+              '          twoFingerTapCandidate = true;',
+              '          twoFingerStartTime = Date.now();',
+              '          var pts = Array.from(activeTouches.values());',
+              '          var midX = (pts[0].x + pts[1].x) / 2;',
+              '          var midY = (pts[0].y + pts[1].y) / 2;',
+              '          var dist = Math.hypot(pts[1].x - pts[0].x, pts[1].y - pts[0].y);',
+              '          panState = { lastMidX: midX, lastMidY: midY, lastDist: dist, isDragging: false };',
+              '        } else {',
+              '          clearTimeout(longPressTimer);',
+              '          twoFingerTapCandidate = false;',
+              '        }',
+              '      }',
+              '    }, { capture: true, passive: false });',
+              '',
+              '    window.addEventListener("pointermove", function(e) {',
+              '      var c = getCanvas();',
+              '      if (!c) return;',
+              '',
+              '      if (e.pointerType === "pen") {',
+              '        clearTimeout(longPressTimer);',
+              '        return;',
+              '      }',
+              '',
+              '      if (e.pointerType === "touch" && activeTouches.has(e.pointerId)) {',
+              '        var t = activeTouches.get(e.pointerId);',
+              '        t.x = e.clientX;',
+              '        t.y = e.clientY;',
+              '',
+              '        if (Math.hypot(t.x - t.startX, t.y - t.startY) > 8) {',
+              '          clearTimeout(longPressTimer);',
+              '          twoFingerTapCandidate = false;',
+              '        }',
+              '',
+              '        if (activeTouches.size === 2 && panState) {',
+              '          var pts = Array.from(activeTouches.values());',
+              '          var curMidX = (pts[0].x + pts[1].x) / 2;',
+              '          var curMidY = (pts[0].y + pts[1].y) / 2;',
+              '          var curDist = Math.hypot(pts[1].x - pts[0].x, pts[1].y - pts[0].y);',
+              '',
+              '          var dx = curMidX - panState.lastMidX;',
+              '          var dy = curMidY - panState.lastMidY;',
+              '          var dDist = curDist - panState.lastDist;',
+              '',
+              '          // Two-Finger Pan: simulate middle-button drag (button: 1, buttons: 4)',
+              '          if (!panState.isDragging && Math.hypot(dx, dy) > 3.0) {',
+              '            panState.isDragging = true;',
+              '            c.dispatchEvent(new PointerEvent("pointerdown", {',
+              '              clientX: curMidX, clientY: curMidY, button: 1, buttons: 4, bubbles: true, pointerType: "mouse"',
+              '            }));',
+              '          }',
+              '',
+              '          if (panState.isDragging) {',
+              '            c.dispatchEvent(new PointerEvent("pointermove", {',
+              '              clientX: curMidX, clientY: curMidY, button: 1, buttons: 4, bubbles: true, pointerType: "mouse"',
+              '            }));',
+              '          }',
+              '',
+              '          // Pinch Zoom: dispatch wheel event',
+              '          if (Math.abs(dDist) > 2.0) {',
+              '            c.dispatchEvent(new WheelEvent("wheel", {',
+              '              clientX: curMidX, clientY: curMidY, deltaY: -dDist * 4.0, deltaMode: 0, bubbles: true, cancelable: true',
+              '            }));',
+              '          }',
+              '',
+              '          panState.lastMidX = curMidX;',
+              '          panState.lastMidY = curMidY;',
+              '          panState.lastDist = curDist;',
+              '        }',
+              '      }',
+              '    }, { capture: true, passive: false });',
+              '',
+              '    function handleTouchEnd(e) {',
+              '      if (e.pointerType === "pen") {',
+              '        isStylusDown = false;',
+              '        clearTimeout(longPressTimer);',
+              '        return;',
+              '      }',
+              '',
+              '      if (e.pointerType === "touch") {',
+              '        clearTimeout(longPressTimer);',
+              '        if (activeTouches.size === 2 && twoFingerTapCandidate && (Date.now() - twoFingerStartTime < 280)) {',
+              '          var pts = Array.from(activeTouches.values());',
+              '          var midX = (pts[0].x + pts[1].x) / 2;',
+              '          var midY = (pts[0].y + pts[1].y) / 2;',
+              '          triggerRightClick(midX, midY);',
+              '        }',
+              '',
+              '        if (panState && panState.isDragging) {',
+              '          var c = getCanvas();',
+              '          if (c) {',
+              '            c.dispatchEvent(new PointerEvent("pointerup", {',
+              '              clientX: panState.lastMidX, clientY: panState.lastMidY, button: 1, buttons: 0, bubbles: true, pointerType: "mouse"',
+              '            }));',
+              '          }',
+              '        }',
+              '',
+              '        activeTouches.delete(e.pointerId);',
+              '        if (activeTouches.size < 2) panState = null;',
+              '      }',
+              '    }',
+              '',
+              '    window.addEventListener("pointerup", handleTouchEnd, { capture: true, passive: false });',
+              '    window.addEventListener("pointercancel", handleTouchEnd, { capture: true, passive: false });',
+              '',
+              '    window.openNativeKeyboard = function() {',
+              '      var inp = document.getElementById("cad-hidden-ime");',
+              '      if (!inp) {',
+              '        inp = document.createElement("input");',
+              '        inp.type = "text";',
+              '        inp.id = "cad-hidden-ime";',
+              '        inp.style.position = "fixed";',
+              '        inp.style.bottom = "10px";',
+              '        inp.style.left = "50%";',
+              '        inp.style.transform = "translateX(-50%)";',
+              '        inp.style.opacity = "0.01";',
+              '        inp.style.height = "1px";',
+              '        inp.style.width = "100px";',
+              '        inp.style.zIndex = "9999";',
+              '        document.body.appendChild(inp);',
+              '      }',
+              '      inp.focus();',
+              '    };',
+              '  })();',
+              '',
+              '  // -------------------------------------------------------------',
+              '  // CAPACITOR EXPORT & SHARE HANDLER',
+              '  // -------------------------------------------------------------',
               '  (function() {',
               '    var blobStore = new Map();',
               '    var origCreate = URL.createObjectURL.bind(URL);',
@@ -536,10 +1127,65 @@ jobs:
           npx cap add android
           npx cap sync android
 
-      - name: Configure Landscape Fullscreen & Large Heap Mode
+      - name: Configure Immersive Fullscreen & Performance Flags
+        shell: python3 {0}
         run: |
-          sed -i 's/android:name=".MainActivity"/android:name=".MainActivity" android:screenOrientation="sensorLandscape"/g' android/app/src/main/AndroidManifest.xml
-          sed -i 's/<application/<application android:largeHeap="true"/g' android/app/src/main/AndroidManifest.xml
+          import os
+
+          # 1. Update AndroidManifest.xml
+          manifest_path = "android/app/src/main/AndroidManifest.xml"
+          with open(manifest_path, "r", encoding="utf-8") as f:
+              manifest = f.read()
+
+          manifest = manifest.replace(
+              'android:name=".MainActivity"',
+              'android:name=".MainActivity" android:screenOrientation="sensorLandscape" android:windowSoftInputMode="adjustResize"'
+          )
+          manifest = manifest.replace('<application', '<application android:largeHeap="true"')
+          with open(manifest_path, "w", encoding="utf-8") as f:
+              f.write(manifest)
+
+          # 2. Configure true Immersive Sticky Fullscreen in MainActivity.java to reveal the full menu bar
+          main_activity_path = "android/app/src/main/java/org/storytold/cadcraft/MainActivity.java"
+          activity_java = '''package org.storytold.cadcraft;
+
+          import android.os.Bundle;
+          import androidx.core.view.WindowCompat;
+          import androidx.core.view.WindowInsetsCompat;
+          import androidx.core.view.WindowInsetsControllerCompat;
+          import com.getcapacitor.BridgeActivity;
+
+          public class MainActivity extends BridgeActivity {
+              @Override
+              public void onCreate(Bundle savedInstanceState) {
+                  super.onCreate(savedInstanceState);
+                  hideSystemBars();
+              }
+
+              @Override
+              public void onWindowFocusChanged(boolean hasFocus) {
+                  super.onWindowFocusChanged(hasFocus);
+                  if (hasFocus) {
+                      hideSystemBars();
+                  }
+              }
+
+              private void hideSystemBars() {
+                  WindowCompat.setDecorFitsSystemWindows(getWindow(), false);
+                  WindowInsetsControllerCompat insetsController =
+                      WindowCompat.getInsetsController(getWindow(), getWindow().getDecorView());
+                  if (insetsController != null) {
+                      insetsController.hide(WindowInsetsCompat.Type.systemBars());
+                      insetsController.setSystemBarsBehavior(
+                          WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+                      );
+                  }
+              }
+          }
+          '''
+          with open(main_activity_path, "w", encoding="utf-8") as f:
+              f.write(activity_java)
+          print("Successfully configured Android Immersive Fullscreen in MainActivity.java!")
 
       - name: Build Debug APK with Gradle
         working-directory: ./android
