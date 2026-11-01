@@ -10,15 +10,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout wrapper repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@v4
 
-      - name: Setup Node.js 24
-        uses: actions/setup-node@v5
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
         with:
-          node-version: '24'
+          node-version: '22'
 
       - name: Setup Java 21 for Android Gradle
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: '21'
@@ -51,317 +51,363 @@ jobs:
           ui_src = "cadcraft-src/crates/ui-egui/src"
           lib_rs_path = os.path.join(ui_src, "lib.rs")
 
-          tablet_lines = [
-              "use egui::{Color32, Context, Event, Id, Key, Modifiers, Order, RichText, Theme, Vec2, Window};",
-              "use crate::CadApp;",
-              "",
-              "#[derive(Clone, Copy, PartialEq, Eq)]",
-              "enum ToolTab { Draw, Modify, Annotate, View }",
-              "",
-              "#[derive(Clone, Copy, PartialEq, Eq)]",
-              "enum KeyboardTab { Qwerty, NumpadCoords }",
-              "",
-              "#[derive(Clone)]",
-              "struct TabletState {",
-              "    initialized: bool,",
-              "    ui_scale: f32,",
-              "    dock_minimized: bool,",
-              "    show_tools: bool,",
-              "    show_keyboard: bool,",
-              "    show_radial: bool,",
-              "    active_tab: ToolTab,",
-              "    kb_tab: KeyboardTab,",
-              "    cmd_buf: String,",
-              "}",
-              "",
-              "impl Default for TabletState {",
-              "    fn default() -> Self {",
-              "        Self {",
-              "            initialized: false,",
-              "            ui_scale: 1.0,",
-              "            dock_minimized: false,",
-              "            show_tools: false,",
-              "            show_keyboard: false,",
-              "            show_radial: false,",
-              "            active_tab: ToolTab::Draw,",
-              "            kb_tab: KeyboardTab::Qwerty,",
-              "            cmd_buf: String::new(),",
-              "        }",
-              "    }",
-              "}",
-              "",
-              "fn apply_tablet_style(ctx: &Context, scale: f32) {",
-              "    ctx.set_zoom_factor(scale);",
-              "    for theme in [Theme::Dark, Theme::Light] {",
-              "        ctx.style_mut_of(theme, |style| {",
-              "            style.spacing.interact_size = Vec2::new(44.0, 36.0);",
-              "            style.spacing.button_padding = Vec2::new(10.0, 7.0);",
-              "            style.spacing.item_spacing = Vec2::new(6.0, 6.0);",
-              "        });",
-              "    }",
-              "}",
-              "",
-              "fn push_key(ctx: &Context, key: Key) {",
-              "    if let Some(focused) = ctx.memory(|m| m.focused()) {",
-              "        ctx.memory_mut(|m| m.surrender_focus(focused));",
-              "    }",
-              "    ctx.input_mut(|i| {",
-              "        i.focused = true;",
-              "        i.events.push(Event::Key {",
-              "            key,",
-              "            physical_key: Some(key),",
-              "            pressed: true,",
-              "            repeat: false,",
-              "            modifiers: Modifiers::NONE,",
-              "        });",
-              "        i.events.push(Event::Key {",
-              "            key,",
-              "            physical_key: Some(key),",
-              "            pressed: false,",
-              "            repeat: false,",
-              "            modifiers: Modifiers::NONE,",
-              "        });",
-              "    });",
-              "}",
-              "",
-              "fn exec_cmdline(app: &mut CadApp, _ctx: &Context, cmd: &str) {",
-              "    let _ = app.cmdline(cmd);",
-              "}",
-              "",
-              "fn exec_start(app: &mut CadApp, _ctx: &Context, id: &str) {",
-              "    app.start(id);",
-              "}",
-              "",
-              "pub fn update(app: &mut CadApp, ctx: &Context) {",
-              "    let state_id = Id::new(\"cadcraft_tablet_state_v4\");",
-              "    let mut state = ctx.data_mut(|d| d.get_temp::<TabletState>(state_id).unwrap_or_default());",
-              "",
-              "    if !state.initialized {",
-              "        state.initialized = true;",
-              "        apply_tablet_style(ctx, state.ui_scale);",
-              "    }",
-              "",
-              "    // 1. MOVABLE ACTION DOCK",
-              "    if state.dock_minimized {",
-              "        Window::new(\"⚡ CAD\")",
-              "            .id(Id::new(\"cad_dock_mini_win\"))",
-              "            .default_pos(egui::pos2(20.0, 780.0))",
-              "            .resizable(false)",
-              "            .collapsible(false)",
-              "            .order(Order::Foreground)",
-              "            .show(ctx, |ui| {",
-              "                if ui.button(RichText::new(\"⚡ CAD Tools\").size(14.0).strong().color(Color32::from_rgb(0, 210, 255))).clicked() {",
-              "                    state.dock_minimized = false;",
-              "                }",
-              "            });",
-              "    } else {",
-              "        Window::new(\"⚡ CAD Dock\")",
-              "            .id(Id::new(\"cad_dock_full_win\"))",
-              "            .default_pos(egui::pos2(260.0, 720.0))",
-              "            .resizable(false)",
-              "            .collapsible(false)",
-              "            .order(Order::Foreground)",
-              "            .show(ctx, |ui| {",
-              "                ui.horizontal(|ui| {",
-              "                    if ui.button(RichText::new(\"—\").size(13.0).color(Color32::GRAY)).on_hover_text(\"Minimize dock\").clicked() {",
-              "                        state.dock_minimized = true;",
-              "                    }",
-              "",
-              "                    ui.separator();",
-              "",
-              "                    let tools_btn = egui::Button::new(RichText::new(\"Tools\").size(13.5).strong())",
-              "                        .fill(if state.show_tools { Color32::from_rgb(0, 110, 180) } else { Color32::from_rgb(45, 48, 54) });",
-              "                    if ui.add(tools_btn).clicked() {",
-              "                        state.show_tools = !state.show_tools;",
-              "                    }",
-              "",
-              "                    let kb_btn = egui::Button::new(RichText::new(\"⌨ Keybd\").size(13.5).strong())",
-              "                        .fill(if state.show_keyboard { Color32::from_rgb(0, 110, 180) } else { Color32::from_rgb(45, 48, 54) });",
-              "                    if ui.add(kb_btn).clicked() {",
-              "                        state.show_keyboard = !state.show_keyboard;",
-              "                    }",
-              "",
-              "                    let rad_btn = egui::Button::new(RichText::new(\"◎ Radial\").size(13.5).strong().color(Color32::from_rgb(0, 240, 255)))",
-              "                        .fill(if state.show_radial { Color32::from_rgb(0, 90, 150) } else { Color32::from_rgb(45, 48, 54) });",
-              "                    if ui.add(rad_btn).clicked() {",
-              "                        state.show_radial = !state.show_radial;",
-              "                    }",
-              "",
-              "                    ui.separator();",
-              "",
-              "                    if ui.button(RichText::new(\"Undo\").size(13.5)).clicked() {",
-              "                        exec_cmdline(app, ctx, \"u\");",
-              "                    }",
-              "                    if ui.button(RichText::new(\"Redo\").size(13.5)).clicked() {",
-              "                        exec_cmdline(app, ctx, \"redo\");",
-              "                    }",
-              "",
-              "                    ui.separator();",
-              "",
-              "                    if ui.button(RichText::new(\"Ortho\").size(13.0)).clicked() {",
-              "                        push_key(ctx, Key::F8);",
-              "                    }",
-              "                    if ui.button(RichText::new(\"Snap\").size(13.0)).clicked() {",
-              "                        push_key(ctx, Key::F3);",
-              "                    }",
-              "                    if ui.button(RichText::new(\"Grid\").size(13.0)).clicked() {",
-              "                        push_key(ctx, Key::F7);",
-              "                    }",
-              "                    if ui.button(RichText::new(\"Fit\").size(13.0)).clicked() {",
-              "                        exec_cmdline(app, ctx, \"zoom e\");",
-              "                    }",
-              "                    if ui.button(RichText::new(\"F2 Hist\").size(13.0)).on_hover_text(\"Toggle/Collapse History\").clicked() {",
-              "                        push_key(ctx, Key::F2);",
-              "                    }",
-              "",
-              "                    ui.separator();",
-              "",
-              "                    let enter_btn = egui::Button::new(RichText::new(\"ENTER\").size(14.0).strong().color(Color32::WHITE))",
-              "                        .fill(Color32::from_rgb(28, 140, 60));",
-              "                    if ui.add(enter_btn).clicked() {",
-              "                        if state.cmd_buf.is_empty() {",
-              "                            exec_cmdline(app, ctx, \"\");",
-              "                            push_key(ctx, Key::Enter);",
-              "                        } else {",
-              "                            let cmd = state.cmd_buf.clone();",
-              "                            state.cmd_buf.clear();",
-              "                            exec_cmdline(app, ctx, &cmd);",
-              "                        }",
-              "                    }",
-              "",
-              "                    let esc_btn = egui::Button::new(RichText::new(\"ESC\").size(14.0).strong().color(Color32::WHITE))",
-              "                        .fill(Color32::from_rgb(180, 40, 40));",
-              "                    if ui.add(esc_btn).clicked() {",
-              "                        state.cmd_buf.clear();",
-              "                        push_key(ctx, Key::Escape);",
-              "                    }",
-              "",
-              "                    ui.separator();",
-              "",
-              "                    if ui.button(RichText::new(\"A-\").size(12.0)).clicked() {",
-              "                        state.ui_scale = (state.ui_scale - 0.05).max(0.85);",
-              "                        apply_tablet_style(ctx, state.ui_scale);",
-              "                    }",
-              "                    if ui.button(RichText::new(\"A+\").size(12.0)).clicked() {",
-              "                        state.ui_scale = (state.ui_scale + 0.05).min(1.50);",
-              "                        apply_tablet_style(ctx, state.ui_scale);",
-              "                    }",
-              "                });",
-              "            });",
-              "    }",
-              "",
-              "    // 2. CAD VIRTUAL KEYBOARD & COMMAND PROMPT",
-              "    if state.show_keyboard {",
-              "        Window::new(\"⌨ CAD Command & Virtual Keyboard\")",
-              "            .id(Id::new(\"cad_keyboard_win\"))",
-              "            .default_pos(egui::pos2(240.0, 440.0))",
-              "            .resizable(false)",
-              "            .collapsible(true)",
-              "            .order(Order::Foreground)",
-              "            .show(ctx, |ui| {",
-              "                ui.horizontal(|ui| {",
-              "                    let display_text = if state.cmd_buf.is_empty() {",
-              "                        \"Type command, alias, coord or distance...\".to_string()",
-              "                    } else {",
-              "                        state.cmd_buf.clone()",
-              "                    };",
-              "                    let text_color = if state.cmd_buf.is_empty() { Color32::GRAY } else { Color32::from_rgb(0, 255, 130) };",
-              "",
-              "                    egui::Frame::canvas(ui.style())",
-              "                        .fill(Color32::from_rgb(14, 16, 20))",
-              "                        .show(ui, |ui| {",
-              "                            ui.set_min_width(280.0);",
-              "                            ui.label(RichText::new(display_text).monospace().size(15.0).color(text_color));",
-              "                        });",
-              "",
-              "                    if ui.button(RichText::new(\"CLR\").size(13.0)).clicked() {",
-              "                        state.cmd_buf.clear();",
-              "                    }",
-              "",
-              "                    let submit_btn = egui::Button::new(RichText::new(\"SUBMIT ↵\").size(14.0).strong().color(Color32::WHITE))",
-              "                        .fill(Color32::from_rgb(25, 140, 55))",
-              "                        .min_size(Vec2::new(90.0, 32.0));",
-              "                    if ui.add(submit_btn).clicked() {",
-              "                        if state.cmd_buf.is_empty() {",
-              "                            push_key(ctx, Key::Enter);",
-              "                        } else {",
-              "                            let cmd = state.cmd_buf.clone();",
-              "                            state.cmd_buf.clear();",
-              "                            exec_cmdline(app, ctx, &cmd);",
-              "                        }",
-              "                    }",
-              "                });",
-              "",
-              "                ui.add_space(3.0);",
-              "",
-              "                let quick_tools = [",
-              "                    (\"LINE\", \"line\"), (\"PLINE\", \"pline\"), (\"RECT\", \"rectang\"), (\"CIRCLE\", \"circle\"),",
-              "                    (\"ARC\", \"arc\"), (\"TRIM\", \"trim\"), (\"EXTEND\", \"extend\"), (\"ERASE\", \"erase\"),",
-              "                    (\"MOVE\", \"move\"), (\"COPY\", \"copy\"), (\"OFFSET\", \"offset\"), (\"FILLET\", \"fillet\"),",
-              "                    (\"DIM\", \"dimlinear\"), (\"DIST\", \"dist\"), (\"FIT\", \"zoom e\"), (\"CLOSE\", \"c\"),",
-              "                ];",
-              "",
-              "                ui.horizontal_wrapped(|ui| {",
-              "                    ui.label(RichText::new(\"Quick CAD:\").small().color(Color32::GRAY));",
-              "                    for (label, id) in quick_tools {",
-              "                        let btn = egui::Button::new(RichText::new(label).size(12.0).strong())",
-              "                            .fill(Color32::from_rgb(38, 42, 50));",
-              "                        if ui.add(btn).clicked() {",
-              "                            if id.contains(' ') {",
-              "                                exec_cmdline(app, ctx, id);",
-              "                            } else {",
-              "                                exec_start(app, ctx, id);",
-              "                            }",
-              "                        }",
-              "                    }",
-              "                });",
-              "",
-              "                ui.separator();",
-              "",
-              "                ui.horizontal(|ui| {",
-              "                    if ui.selectable_label(state.kb_tab == KeyboardTab::Qwerty, \"ABC Keyboard\").clicked() {",
-              "                        state.kb_tab = KeyboardTab::Qwerty;",
-              "                    }",
-              "                    if ui.selectable_label(state.kb_tab == KeyboardTab::NumpadCoords, \"123 / Coords & Prompt Chips\").clicked() {",
-              "                        state.kb_tab = KeyboardTab::NumpadCoords;",
-              "                    }",
-              "                });",
-              "",
-              "                ui.add_space(4.0);",
-              "",
-              "                match state.kb_tab {",
-              "                    KeyboardTab::Qwerty => {",
-              "                        let qwerty_rows: [[&str; 10]; 3] = [",
-              "                            [\"Q\", \"W\", \"E\", \"R\", \"T\", \"Y\", \"U\", \"I\", \"O\", \"P\"],",
-              "                            [\"A\", \"S\", \"D\", \"F\", \"G\", \"H\", \"J\", \"K\", \"L\", \"-\"],",
-              "                            [\"Z\", \"X\", \"C\", \"V\", \"B\", \"N\", \"M\", \",\", \"@\", \"<\"],",
-              "                        ];",
-              "",
-              "                        for row in &qwerty_rows {",
-              "                            ui.horizontal(|ui| {",
-              "                                for &ch in row {",
-              "                                    let btn = egui::Button::new(RichText::new(ch).size(15.0).strong())",
-              "                                        .min_size(Vec2::new(42.0, 36.0));",
-              "                                    if ui.add(btn).clicked() {",
-              "                                        state.cmd_buf.push_str(ch);",
-              "                                    }",
-              "                                }",
-              "                            });",
-              "                        }",
-              "",
-              "                        ui.horizontal(|ui| {",
-              "                            let sp_btn = egui::Button::new(RichText::new(\"SPACE\").size(14.0).strong())",
-              "                                .min_size(Vec2::new(140.0, 36.0));",
-              "                            if ui.add(sp_btn).clicked() {",
-              "                                state.cmd_buf.push(' ');",
-              "                            }",
-              "",
-              "                            for &sym in &[\".\", \"/\", \"0\", \"1\", \"2\"] {",
-              "                                let btn = egui::Button::new(RichText::new(sym).size(14.0).strong())",
-              "                                    .min_size(Vec2::new(36.0, 36.0));",
-              "                                if ui.add(btn).clicked() {",
-              "                                    state.cmd_buf.push_str(sym);",
-              "                                }",
-              "                            }",
-              "",
-              "                            let bksp_btn = egui::Button::new(RichText::new(\"⌫\").size(16.0)
+          tablet_rs_code = r'''use egui::{Color32, Context, Event, Id, Key, Modifiers, Order, RichText, Theme, Vec2, Window};
+          use crate::CadApp;
+
+          #[derive(Clone, Copy, PartialEq, Eq)]
+          enum ToolTab { Draw, Modify, Annotate, View }
+
+          #[derive(Clone, Copy, PartialEq, Eq)]
+          enum KeyboardTab { Qwerty, NumpadCoords }
+
+          #[derive(Clone)]
+          struct TabletState {
+              initialized: bool,
+              ui_scale: f32,
+              dock_minimized: bool,
+              show_tools: bool,
+              show_keyboard: bool,
+              show_radial: bool,
+              active_tab: ToolTab,
+              kb_tab: KeyboardTab,
+              cmd_buf: String,
+          }
+
+          impl Default for TabletState {
+              fn default() -> Self {
+                  Self {
+                      initialized: false,
+                      ui_scale: 1.0,
+                      dock_minimized: false,
+                      show_tools: false,
+                      show_keyboard: false,
+                      show_radial: false,
+                      active_tab: ToolTab::Draw,
+                      kb_tab: KeyboardTab::Qwerty,
+                      cmd_buf: String::new(),
+                  }
+              }
+          }
+
+          fn apply_tablet_style(ctx: &Context, scale: f32) {
+              ctx.set_zoom_factor(scale);
+              for theme in [Theme::Dark, Theme::Light] {
+                  ctx.style_mut_of(theme, |style| {
+                      style.spacing.interact_size = Vec2::new(44.0, 36.0);
+                      style.spacing.button_padding = Vec2::new(10.0, 7.0);
+                      style.spacing.item_spacing = Vec2::new(6.0, 6.0);
+                  });
+              }
+          }
+
+          fn push_key(ctx: &Context, key: Key) {
+              if let Some(focused) = ctx.memory(|m| m.focused()) {
+                  ctx.memory_mut(|m| m.surrender_focus(focused));
+              }
+              ctx.input_mut(|i| {
+                  i.focused = true;
+                  i.events.push(Event::Key {
+                      key,
+                      physical_key: Some(key),
+                      pressed: true,
+                      repeat: false,
+                      modifiers: Modifiers::NONE,
+                  });
+                  i.events.push(Event::Key {
+                      key,
+                      physical_key: Some(key),
+                      pressed: false,
+                      repeat: false,
+                      modifiers: Modifiers::NONE,
+                  });
+              });
+          }
+
+          fn exec_cmdline(app: &mut CadApp, _ctx: &Context, cmd: &str) {
+              let _ = app.cmdline(cmd);
+          }
+
+          fn exec_start(app: &mut CadApp, _ctx: &Context, id: &str) {
+              app.start(id);
+          }
+
+          pub fn update(app: &mut CadApp, ctx: &Context) {
+              let state_id = Id::new("cadcraft_tablet_state_v4");
+              let mut state = ctx.data_mut(|d| d.get_temp::<TabletState>(state_id).unwrap_or_default());
+
+              if !state.initialized {
+                  state.initialized = true;
+                  apply_tablet_style(ctx, state.ui_scale);
+              }
+
+              // 1. MOVABLE ACTION DOCK
+              if state.dock_minimized {
+                  Window::new("CAD")
+                      .id(Id::new("cad_dock_mini_win"))
+                      .default_pos(egui::pos2(20.0, 780.0))
+                      .resizable(false)
+                      .collapsible(false)
+                      .order(Order::Foreground)
+                      .show(ctx, |ui| {
+                          if ui.button(RichText::new("[+] CAD Tools").size(14.0).strong().color(Color32::from_rgb(0, 210, 255))).clicked() {
+                              state.dock_minimized = false;
+                          }
+                      });
+              } else {
+                  Window::new("CAD Dock")
+                      .id(Id::new("cad_dock_full_win"))
+                      .default_pos(egui::pos2(260.0, 720.0))
+                      .resizable(false)
+                      .collapsible(false)
+                      .order(Order::Foreground)
+                      .show(ctx, |ui| {
+                          ui.horizontal(|ui| {
+                              if ui.button(RichText::new("[-]").size(13.0).color(Color32::GRAY)).on_hover_text("Minimize dock").clicked() {
+                                  state.dock_minimized = true;
+                              }
+
+                              ui.separator();
+
+                              let tools_btn = egui::Button::new(RichText::new("Tools").size(13.5).strong())
+                                  .fill(if state.show_tools { Color32::from_rgb(0, 110, 180) } else { Color32::from_rgb(45, 48, 54) });
+                              if ui.add(tools_btn).clicked() {
+                                  state.show_tools = !state.show_tools;
+                              }
+
+                              let kb_btn = egui::Button::new(RichText::new("Keybd").size(13.5).strong())
+                                  .fill(if state.show_keyboard { Color32::from_rgb(0, 110, 180) } else { Color32::from_rgb(45, 48, 54) });
+                              if ui.add(kb_btn).clicked() {
+                                  state.show_keyboard = !state.show_keyboard;
+                              }
+
+                              let rad_btn = egui::Button::new(RichText::new("Radial").size(13.5).strong().color(Color32::from_rgb(0, 240, 255)))
+                                  .fill(if state.show_radial { Color32::from_rgb(0, 90, 150) } else { Color32::from_rgb(45, 48, 54) });
+                              if ui.add(rad_btn).clicked() {
+                                  state.show_radial = !state.show_radial;
+                              }
+
+                              ui.separator();
+
+                              if ui.button(RichText::new("Undo").size(13.5)).clicked() {
+                                  exec_cmdline(app, ctx, "u");
+                              }
+                              if ui.button(RichText::new("Redo").size(13.5)).clicked() {
+                                  exec_cmdline(app, ctx, "redo");
+                              }
+
+                              ui.separator();
+
+                              if ui.button(RichText::new("Ortho").size(13.0)).clicked() {
+                                  push_key(ctx, Key::F8);
+                              }
+                              if ui.button(RichText::new("Snap").size(13.0)).clicked() {
+                                  push_key(ctx, Key::F3);
+                              }
+                              if ui.button(RichText::new("Grid").size(13.0)).clicked() {
+                                  push_key(ctx, Key::F7);
+                              }
+                              if ui.button(RichText::new("Fit").size(13.0)).clicked() {
+                                  exec_cmdline(app, ctx, "zoom e");
+                              }
+                              if ui.button(RichText::new("F2 Hist").size(13.0)).on_hover_text("Toggle/Collapse History").clicked() {
+                                  push_key(ctx, Key::F2);
+                              }
+
+                              ui.separator();
+
+                              let enter_btn = egui::Button::new(RichText::new("ENTER").size(14.0).strong().color(Color32::WHITE))
+                                  .fill(Color32::from_rgb(28, 140, 60));
+                              if ui.add(enter_btn).clicked() {
+                                  if state.cmd_buf.is_empty() {
+                                      exec_cmdline(app, ctx, "");
+                                      push_key(ctx, Key::Enter);
+                                  } else {
+                                      let cmd = state.cmd_buf.clone();
+                                      state.cmd_buf.clear();
+                                      exec_cmdline(app, ctx, &cmd);
+                                  }
+                              }
+
+                              let esc_btn = egui::Button::new(RichText::new("ESC").size(14.0).strong().color(Color32::WHITE))
+                                  .fill(Color32::from_rgb(180, 40, 40));
+                              if ui.add(esc_btn).clicked() {
+                                  state.cmd_buf.clear();
+                                  push_key(ctx, Key::Escape);
+                              }
+
+                              ui.separator();
+
+                              if ui.button(RichText::new("A-").size(12.0)).clicked() {
+                                  state.ui_scale = (state.ui_scale - 0.05).max(0.85);
+                                  apply_tablet_style(ctx, state.ui_scale);
+                              }
+                              if ui.button(RichText::new("A+").size(12.0)).clicked() {
+                                  state.ui_scale = (state.ui_scale + 0.05).min(1.50);
+                                  apply_tablet_style(ctx, state.ui_scale);
+                              }
+                          });
+                      });
+              }
+
+              // 2. CAD VIRTUAL KEYBOARD & COMMAND PROMPT
+              if state.show_keyboard {
+                  Window::new("CAD Command & Virtual Keyboard")
+                      .id(Id::new("cad_keyboard_win"))
+                      .default_pos(egui::pos2(240.0, 440.0))
+                      .resizable(false)
+                      .collapsible(true)
+                      .order(Order::Foreground)
+                      .show(ctx, |ui| {
+                          ui.horizontal(|ui| {
+                              let display_text = if state.cmd_buf.is_empty() {
+                                  "Type command, alias, coord or distance...".to_string()
+                              } else {
+                                  state.cmd_buf.clone()
+                              };
+                              let text_color = if state.cmd_buf.is_empty() { Color32::GRAY } else { Color32::from_rgb(0, 255, 130) };
+
+                              egui::Frame::canvas(ui.style())
+                                  .fill(Color32::from_rgb(14, 16, 20))
+                                  .show(ui, |ui| {
+                                      ui.set_min_width(280.0);
+                                      ui.label(RichText::new(display_text).monospace().size(15.0).color(text_color));
+                                  });
+
+                              if ui.button(RichText::new("CLR").size(13.0)).clicked() {
+                                  state.cmd_buf.clear();
+                              }
+
+                              let submit_btn = egui::Button::new(RichText::new("SUBMIT >>").size(14.0).strong().color(Color32::WHITE))
+                                  .fill(Color32::from_rgb(25, 140, 55))
+                                  .min_size(Vec2::new(90.0, 32.0));
+                              if ui.add(submit_btn).clicked() {
+                                  if state.cmd_buf.is_empty() {
+                                      push_key(ctx, Key::Enter);
+                                  } else {
+                                      let cmd = state.cmd_buf.clone();
+                                      state.cmd_buf.clear();
+                                      exec_cmdline(app, ctx, &cmd);
+                                  }
+                              }
+                          });
+
+                          ui.add_space(3.0);
+
+                          let quick_tools = [
+                              ("LINE", "line"), ("PLINE", "pline"), ("RECT", "rectang"), ("CIRCLE", "circle"),
+                              ("ARC", "arc"), ("TRIM", "trim"), ("EXTEND", "extend"), ("ERASE", "erase"),
+                              ("MOVE", "move"), ("COPY", "copy"), ("OFFSET", "offset"), ("FILLET", "fillet"),
+                              ("DIM", "dimlinear"), ("DIST", "dist"), ("FIT", "zoom e"), ("CLOSE", "c"),
+                          ];
+
+                          ui.horizontal_wrapped(|ui| {
+                              ui.label(RichText::new("Quick CAD:").small().color(Color32::GRAY));
+                              for (label, id) in quick_tools {
+                                  let btn = egui::Button::new(RichText::new(label).size(12.0).strong())
+                                      .fill(Color32::from_rgb(38, 42, 50));
+                                  if ui.add(btn).clicked() {
+                                      if id.contains(' ') {
+                                          exec_cmdline(app, ctx, id);
+                                      } else {
+                                          exec_start(app, ctx, id);
+                                      }
+                                  }
+                              }
+                          });
+
+                          ui.separator();
+
+                          ui.horizontal(|ui| {
+                              if ui.selectable_label(state.kb_tab == KeyboardTab::Qwerty, "ABC Keyboard").clicked() {
+                                  state.kb_tab = KeyboardTab::Qwerty;
+                              }
+                              if ui.selectable_label(state.kb_tab == KeyboardTab::NumpadCoords, "123 / Coords & Prompt Chips").clicked() {
+                                  state.kb_tab = KeyboardTab::NumpadCoords;
+                              }
+                          });
+
+                          ui.add_space(4.0);
+
+                          match state.kb_tab {
+                              KeyboardTab::Qwerty => {
+                                  let qwerty_rows: [[&str; 10]; 3] = [
+                                      ["Q", "W", "E", "R", "T", "Y", "U", "I", "O", "P"],
+                                      ["A", "S", "D", "F", "G", "H", "J", "K", "L", "-"],
+                                      ["Z", "X", "C", "V", "B", "N", "M", ",", "@", "<"],
+                                  ];
+
+                                  for row in &qwerty_rows {
+                                      ui.horizontal(|ui| {
+                                          for &ch in row {
+                                              let btn = egui::Button::new(RichText::new(ch).size(15.0).strong())
+                                                  .min_size(Vec2::new(42.0, 36.0));
+                                              if ui.add(btn).clicked() {
+                                                  state.cmd_buf.push_str(ch);
+                                              }
+                                          }
+                                      });
+                                  }
+
+                                  ui.horizontal(|ui| {
+                                      let sp_btn = egui::Button::new(RichText::new("SPACE").size(14.0).strong())
+                                          .min_size(Vec2::new(140.0, 36.0));
+                                      if ui.add(sp_btn).clicked() {
+                                          state.cmd_buf.push(' ');
+                                      }
+
+                                      for &sym in &[".", "/", "0", "1", "2"] {
+                                          let btn = egui::Button::new(RichText::new(sym).size(14.0).strong())
+                                              .min_size(Vec2::new(36.0, 36.0));
+                                          if ui.add(btn).clicked() {
+                                              state.cmd_buf.push_str(sym);
+                                          }
+                                      }
+
+                                      let bksp_btn = egui::Button::new(RichText::new("BKSP").size(13.0).strong())
+                                          .fill(Color32::from_rgb(70, 45, 45))
+                                          .min_size(Vec2::new(56.0, 36.0));
+                                      if ui.add(bksp_btn).clicked() {
+                                          if state.cmd_buf.pop().is_none() {
+                                              push_key(ctx, Key::Backspace);
+                                          }
+                                      }
+                                  });
+                              }
+                              KeyboardTab::NumpadCoords => {
+                                  let rows: [[&str; 4]; 4] = [
+                                      ["7", "8", "9", "@"],
+                                      ["4", "5", "6", "<"],
+                                      ["1", "2", "3", ","],
+                                      ["0", ".", "-", "BKSP"],
+                                  ];
+                                  for row in &rows {
+                                      ui.horizontal(|ui| {
+                                          for &k in row {
+                                              let btn = egui::Button::new(RichText::new(k).monospace().size(15.0).strong())
+                                                  .min_size(Vec2::new(60.0, 38.0));
+                                              if ui.add(btn).clicked() {
+                                                  if k == "BKSP" {
+                                                      if state.cmd_buf.pop().is_none() {
+                                                          push_key(ctx, Key::Backspace);
+                                                      }
+                                                  } else {
+                                                      state.cmd_buf.push_str(k);
+                                                  }
+                                              }
+                                          }
+                                      });
+                                  }
+
+                                  ui.add_space(4.0);
+
+                                  ui.horizontal_wrapped(|ui| {
+                                      let chips = [
+                                          ("@0,0", "@0,0"), ("@10<0", "@10<0"), ("Close", "c"),
+                                          ("Undo", "u"), ("Radius", "r"), ("Dia", "d"), ("2P", "2p"),
+                                      ];
+                                      for (label, kw) in chips {
+                                          if ui.button(RichText::new(label).size(12.5)).clicked() {
+                                              exec_cmdline(app, ctx, kw);
+                                          }
+                                      }
+ 
