@@ -43,15 +43,13 @@ jobs:
           curl -L --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh | bash
           cargo binstall -y trunk
 
-      - name: Inject Native Rust Tablet UI Module (crates/ui-egui/src/tablet.rs)
-        shell: python3 {0}
+      - name: Inject Native Rust Tablet UI Module
         run: |
-          import os
+          UI_SRC="cadcraft-src/crates/ui-egui/src"
+          LIB_RS="$UI_SRC/lib.rs"
 
-          ui_src = "cadcraft-src/crates/ui-egui/src"
-          lib_rs_path = os.path.join(ui_src, "lib.rs")
-
-          tablet_rs_code = r'''use egui::{Color32, Context, Event, Id, Key, Modifiers, Order, RichText, Theme, Vec2, Window};
+          cat << 'EOF' > "$UI_SRC/tablet.rs"
+          use egui::{Color32, Context, Event, Id, Key, Modifiers, Order, RichText, Theme, Vec2, Window};
           use crate::CadApp;
 
           #[derive(Clone, Copy, PartialEq, Eq)]
@@ -106,29 +104,20 @@ jobs:
               }
               ctx.input_mut(|i| {
                   i.focused = true;
-                  i.events.push(Event::Key {
-                      key,
-                      physical_key: Some(key),
-                      pressed: true,
-                      repeat: false,
-                      modifiers: Modifiers::NONE,
-                  });
-                  i.events.push(Event::Key {
-                      key,
-                      physical_key: Some(key),
-                      pressed: false,
-                      repeat: false,
-                      modifiers: Modifiers::NONE,
-                  });
+                  for pressed in [true, false] {
+                      i.events.push(Event::Key {
+                          key,
+                          physical_key: Some(key),
+                          pressed,
+                          repeat: false,
+                          modifiers: Modifiers::NONE,
+                      });
+                  }
               });
           }
 
-          fn exec_cmdline(app: &mut CadApp, _ctx: &Context, cmd: &str) {
-              let _ = app.cmdline(cmd);
-          }
-
-          fn exec_start(app: &mut CadApp, _ctx: &Context, id: &str) {
-              app.start(id);
+          fn run_cmd(app: &mut CadApp, cmd: &str) {
+              if cmd.contains(' ') { let _ = app.cmdline(cmd); } else { app.start(cmd); }
           }
 
           pub fn update(app: &mut CadApp, ctx: &Context) {
@@ -140,274 +129,315 @@ jobs:
                   apply_tablet_style(ctx, state.ui_scale);
               }
 
-              // 1. MOVABLE ACTION DOCK
               if state.dock_minimized {
-                  Window::new("CAD")
-                      .id(Id::new("cad_dock_mini_win"))
-                      .default_pos(egui::pos2(20.0, 780.0))
-                      .resizable(false)
-                      .collapsible(false)
-                      .order(Order::Foreground)
-                      .show(ctx, |ui| {
+                  Window::new("CAD").id(Id::new("cad_dock_mini")).default_pos(egui::pos2(20.0, 780.0))
+                      .resizable(false).collapsible(false).order(Order::Foreground).show(ctx, |ui| {
                           if ui.button(RichText::new("[+] CAD Tools").size(14.0).strong().color(Color32::from_rgb(0, 210, 255))).clicked() {
                               state.dock_minimized = false;
                           }
                       });
               } else {
-                  Window::new("CAD Dock")
-                      .id(Id::new("cad_dock_full_win"))
-                      .default_pos(egui::pos2(260.0, 720.0))
-                      .resizable(false)
-                      .collapsible(false)
-                      .order(Order::Foreground)
-                      .show(ctx, |ui| {
+                  Window::new("CAD Dock").id(Id::new("cad_dock_full")).default_pos(egui::pos2(260.0, 720.0))
+                      .resizable(false).collapsible(false).order(Order::Foreground).show(ctx, |ui| {
                           ui.horizontal(|ui| {
-                              if ui.button(RichText::new("[-]").size(13.0).color(Color32::GRAY)).on_hover_text("Minimize dock").clicked() {
-                                  state.dock_minimized = true;
-                              }
-
+                              if ui.button(RichText::new("[-]").size(13.0)).clicked() { state.dock_minimized = true; }
                               ui.separator();
-
-                              let tools_btn = egui::Button::new(RichText::new("Tools").size(13.5).strong())
-                                  .fill(if state.show_tools { Color32::from_rgb(0, 110, 180) } else { Color32::from_rgb(45, 48, 54) });
-                              if ui.add(tools_btn).clicked() {
+                              let c_on = Color32::from_rgb(0, 110, 180);
+                              let c_off = Color32::from_rgb(45, 48, 54);
+                              if ui.add(egui::Button::new(RichText::new("Tools").size(13.5).strong()).fill(if state.show_tools { c_on } else { c_off })).clicked() {
                                   state.show_tools = !state.show_tools;
                               }
-
-                              let kb_btn = egui::Button::new(RichText::new("Keybd").size(13.5).strong())
-                                  .fill(if state.show_keyboard { Color32::from_rgb(0, 110, 180) } else { Color32::from_rgb(45, 48, 54) });
-                              if ui.add(kb_btn).clicked() {
+                              if ui.add(egui::Button::new(RichText::new("Keybd").size(13.5).strong()).fill(if state.show_keyboard { c_on } else { c_off })).clicked() {
                                   state.show_keyboard = !state.show_keyboard;
                               }
-
-                              let rad_btn = egui::Button::new(RichText::new("Radial").size(13.5).strong().color(Color32::from_rgb(0, 240, 255)))
-                                  .fill(if state.show_radial { Color32::from_rgb(0, 90, 150) } else { Color32::from_rgb(45, 48, 54) });
-                              if ui.add(rad_btn).clicked() {
+                              if ui.add(egui::Button::new(RichText::new("Radial").size(13.5).strong()).fill(if state.show_radial { c_on } else { c_off })).clicked() {
                                   state.show_radial = !state.show_radial;
                               }
-
                               ui.separator();
-
-                              if ui.button(RichText::new("Undo").size(13.5)).clicked() {
-                                  exec_cmdline(app, ctx, "u");
-                              }
-                              if ui.button(RichText::new("Redo").size(13.5)).clicked() {
-                                  exec_cmdline(app, ctx, "redo");
-                              }
-
+                              if ui.button("Undo").clicked() { let _ = app.cmdline("u"); }
+                              if ui.button("Redo").clicked() { let _ = app.cmdline("redo"); }
                               ui.separator();
-
-                              if ui.button(RichText::new("Ortho").size(13.0)).clicked() {
-                                  push_key(ctx, Key::F8);
-                              }
-                              if ui.button(RichText::new("Snap").size(13.0)).clicked() {
-                                  push_key(ctx, Key::F3);
-                              }
-                              if ui.button(RichText::new("Grid").size(13.0)).clicked() {
-                                  push_key(ctx, Key::F7);
-                              }
-                              if ui.button(RichText::new("Fit").size(13.0)).clicked() {
-                                  exec_cmdline(app, ctx, "zoom e");
-                              }
-                              if ui.button(RichText::new("F2 Hist").size(13.0)).on_hover_text("Toggle/Collapse History").clicked() {
-                                  push_key(ctx, Key::F2);
-                              }
-
+                              if ui.button("Ortho").clicked() { push_key(ctx, Key::F8); }
+                              if ui.button("Snap").clicked() { push_key(ctx, Key::F3); }
+                              if ui.button("Grid").clicked() { push_key(ctx, Key::F7); }
+                              if ui.button("Fit").clicked() { let _ = app.cmdline("zoom e"); }
+                              if ui.button("F2 Hist").clicked() { push_key(ctx, Key::F2); }
                               ui.separator();
-
-                              let enter_btn = egui::Button::new(RichText::new("ENTER").size(14.0).strong().color(Color32::WHITE))
-                                  .fill(Color32::from_rgb(28, 140, 60));
-                              if ui.add(enter_btn).clicked() {
-                                  if state.cmd_buf.is_empty() {
-                                      exec_cmdline(app, ctx, "");
-                                      push_key(ctx, Key::Enter);
-                                  } else {
-                                      let cmd = state.cmd_buf.clone();
-                                      state.cmd_buf.clear();
-                                      exec_cmdline(app, ctx, &cmd);
-                                  }
+                              if ui.add(egui::Button::new(RichText::new("ENTER").strong().color(Color32::WHITE)).fill(Color32::from_rgb(28, 140, 60))).clicked() {
+                                  if state.cmd_buf.is_empty() { let _ = app.cmdline(""); push_key(ctx, Key::Enter); }
+                                  else { let c = state.cmd_buf.clone(); state.cmd_buf.clear(); let _ = app.cmdline(&c); }
                               }
-
-                              let esc_btn = egui::Button::new(RichText::new("ESC").size(14.0).strong().color(Color32::WHITE))
-                                  .fill(Color32::from_rgb(180, 40, 40));
-                              if ui.add(esc_btn).clicked() {
-                                  state.cmd_buf.clear();
-                                  push_key(ctx, Key::Escape);
+                              if ui.add(egui::Button::new(RichText::new("ESC").strong().color(Color32::WHITE)).fill(Color32::from_rgb(180, 40, 40))).clicked() {
+                                  state.cmd_buf.clear(); push_key(ctx, Key::Escape);
                               }
-
                               ui.separator();
-
-                              if ui.button(RichText::new("A-").size(12.0)).clicked() {
-                                  state.ui_scale = (state.ui_scale - 0.05).max(0.85);
-                                  apply_tablet_style(ctx, state.ui_scale);
-                              }
-                              if ui.button(RichText::new("A+").size(12.0)).clicked() {
-                                  state.ui_scale = (state.ui_scale + 0.05).min(1.50);
-                                  apply_tablet_style(ctx, state.ui_scale);
-                              }
+                              if ui.button("A-").clicked() { state.ui_scale = (state.ui_scale - 0.05).max(0.85); apply_tablet_style(ctx, state.ui_scale); }
+                              if ui.button("A+").clicked() { state.ui_scale = (state.ui_scale + 0.05).min(1.50); apply_tablet_style(ctx, state.ui_scale); }
                           });
                       });
               }
 
-              // 2. CAD VIRTUAL KEYBOARD & COMMAND PROMPT
               if state.show_keyboard {
-                  Window::new("CAD Command & Virtual Keyboard")
-                      .id(Id::new("cad_keyboard_win"))
-                      .default_pos(egui::pos2(240.0, 440.0))
-                      .resizable(false)
-                      .collapsible(true)
-                      .order(Order::Foreground)
-                      .show(ctx, |ui| {
+                  Window::new("CAD Command & Virtual Keyboard").id(Id::new("cad_kb_win")).default_pos(egui::pos2(240.0, 440.0))
+                      .resizable(false).collapsible(true).order(Order::Foreground).show(ctx, |ui| {
                           ui.horizontal(|ui| {
-                              let display_text = if state.cmd_buf.is_empty() {
-                                  "Type command, alias, coord or distance...".to_string()
-                              } else {
-                                  state.cmd_buf.clone()
-                              };
-                              let text_color = if state.cmd_buf.is_empty() { Color32::GRAY } else { Color32::from_rgb(0, 255, 130) };
-
-                              egui::Frame::canvas(ui.style())
-                                  .fill(Color32::from_rgb(14, 16, 20))
-                                  .show(ui, |ui| {
-                                      ui.set_min_width(280.0);
-                                      ui.label(RichText::new(display_text).monospace().size(15.0).color(text_color));
-                                  });
-
-                              if ui.button(RichText::new("CLR").size(13.0)).clicked() {
-                                  state.cmd_buf.clear();
-                              }
-
-                              let submit_btn = egui::Button::new(RichText::new("SUBMIT >>").size(14.0).strong().color(Color32::WHITE))
-                                  .fill(Color32::from_rgb(25, 140, 55))
-                                  .min_size(Vec2::new(90.0, 32.0));
-                              if ui.add(submit_btn).clicked() {
-                                  if state.cmd_buf.is_empty() {
-                                      push_key(ctx, Key::Enter);
-                                  } else {
-                                      let cmd = state.cmd_buf.clone();
-                                      state.cmd_buf.clear();
-                                      exec_cmdline(app, ctx, &cmd);
-                                  }
+                              let txt = if state.cmd_buf.is_empty() { "Type command, coord or distance..." } else { &state.cmd_buf };
+                              let col = if state.cmd_buf.is_empty() { Color32::GRAY } else { Color32::from_rgb(0, 255, 130) };
+                              egui::Frame::canvas(ui.style()).fill(Color32::from_rgb(14, 16, 20)).show(ui, |ui| {
+                                  ui.set_min_width(260.0);
+                                  ui.label(RichText::new(txt).monospace().size(15.0).color(col));
+                              });
+                              if ui.button("CLR").clicked() { state.cmd_buf.clear(); }
+                              if ui.add(egui::Button::new(RichText::new("SUBMIT").strong().color(Color32::WHITE)).fill(Color32::from_rgb(25, 140, 55))).clicked() {
+                                  if state.cmd_buf.is_empty() { push_key(ctx, Key::Enter); }
+                                  else { let c = state.cmd_buf.clone(); state.cmd_buf.clear(); let _ = app.cmdline(&c); }
                               }
                           });
-
-                          ui.add_space(3.0);
-
-                          let quick_tools = [
-                              ("LINE", "line"), ("PLINE", "pline"), ("RECT", "rectang"), ("CIRCLE", "circle"),
-                              ("ARC", "arc"), ("TRIM", "trim"), ("EXTEND", "extend"), ("ERASE", "erase"),
-                              ("MOVE", "move"), ("COPY", "copy"), ("OFFSET", "offset"), ("FILLET", "fillet"),
-                              ("DIM", "dimlinear"), ("DIST", "dist"), ("FIT", "zoom e"), ("CLOSE", "c"),
-                          ];
-
-                          ui.horizontal_wrapped(|ui| {
-                              ui.label(RichText::new("Quick CAD:").small().color(Color32::GRAY));
-                              for (label, id) in quick_tools {
-                                  let btn = egui::Button::new(RichText::new(label).size(12.0).strong())
-                                      .fill(Color32::from_rgb(38, 42, 50));
-                                  if ui.add(btn).clicked() {
-                                      if id.contains(' ') {
-                                          exec_cmdline(app, ctx, id);
-                                      } else {
-                                          exec_start(app, ctx, id);
-                                      }
-                                  }
-                              }
-                          });
-
                           ui.separator();
-
                           ui.horizontal(|ui| {
-                              if ui.selectable_label(state.kb_tab == KeyboardTab::Qwerty, "ABC Keyboard").clicked() {
-                                  state.kb_tab = KeyboardTab::Qwerty;
-                              }
-                              if ui.selectable_label(state.kb_tab == KeyboardTab::NumpadCoords, "123 / Coords & Prompt Chips").clicked() {
-                                  state.kb_tab = KeyboardTab::NumpadCoords;
-                              }
+                              if ui.selectable_label(state.kb_tab == KeyboardTab::Qwerty, "ABC Keyboard").clicked() { state.kb_tab = KeyboardTab::Qwerty; }
+                              if ui.selectable_label(state.kb_tab == KeyboardTab::NumpadCoords, "123 / Coords").clicked() { state.kb_tab = KeyboardTab::NumpadCoords; }
                           });
-
-                          ui.add_space(4.0);
-
                           match state.kb_tab {
                               KeyboardTab::Qwerty => {
-                                  let qwerty_rows: [[&str; 10]; 3] = [
-                                      ["Q", "W", "E", "R", "T", "Y", "U", "I", "O", "P"],
-                                      ["A", "S", "D", "F", "G", "H", "J", "K", "L", "-"],
-                                      ["Z", "X", "C", "V", "B", "N", "M", ",", "@", "<"],
-                                  ];
-
-                                  for row in &qwerty_rows {
+                                  for row in [["Q","W","E","R","T","Y","U","I","O","P"],["A","S","D","F","G","H","J","K","L","-"],["Z","X","C","V","B","N","M",",","@","<"]] {
                                       ui.horizontal(|ui| {
-                                          for &ch in row {
-                                              let btn = egui::Button::new(RichText::new(ch).size(15.0).strong())
-                                                  .min_size(Vec2::new(42.0, 36.0));
-                                              if ui.add(btn).clicked() {
+                                          for ch in row {
+                                              if ui.add(egui::Button::new(RichText::new(ch).size(15.0).strong()).min_size(Vec2::new(40.0, 35.0))).clicked() {
                                                   state.cmd_buf.push_str(ch);
                                               }
                                           }
                                       });
                                   }
-
                                   ui.horizontal(|ui| {
-                                      let sp_btn = egui::Button::new(RichText::new("SPACE").size(14.0).strong())
-                                          .min_size(Vec2::new(140.0, 36.0));
-                                      if ui.add(sp_btn).clicked() {
-                                          state.cmd_buf.push(' ');
+                                      if ui.add(egui::Button::new("SPACE").min_size(Vec2::new(130.0, 35.0))).clicked() { state.cmd_buf.push(' '); }
+                                      for s in [".", "/", "0", "1", "2"] {
+                                          if ui.add(egui::Button::new(s).min_size(Vec2::new(35.0, 35.0))).clicked() { state.cmd_buf.push_str(s); }
                                       }
-
-                                      for &sym in &[".", "/", "0", "1", "2"] {
-                                          let btn = egui::Button::new(RichText::new(sym).size(14.0).strong())
-                                              .min_size(Vec2::new(36.0, 36.0));
-                                          if ui.add(btn).clicked() {
-                                              state.cmd_buf.push_str(sym);
-                                          }
-                                      }
-
-                                      let bksp_btn = egui::Button::new(RichText::new("BKSP").size(13.0).strong())
-                                          .fill(Color32::from_rgb(70, 45, 45))
-                                          .min_size(Vec2::new(56.0, 36.0));
-                                      if ui.add(bksp_btn).clicked() {
-                                          if state.cmd_buf.pop().is_none() {
-                                              push_key(ctx, Key::Backspace);
-                                          }
+                                      if ui.add(egui::Button::new("BKSP").fill(Color32::from_rgb(70, 45, 45)).min_size(Vec2::new(56.0, 35.0))).clicked() {
+                                          if state.cmd_buf.pop().is_none() { push_key(ctx, Key::Backspace); }
                                       }
                                   });
                               }
                               KeyboardTab::NumpadCoords => {
-                                  let rows: [[&str; 4]; 4] = [
-                                      ["7", "8", "9", "@"],
-                                      ["4", "5", "6", "<"],
-                                      ["1", "2", "3", ","],
-                                      ["0", ".", "-", "BKSP"],
-                                  ];
-                                  for row in &rows {
+                                  for row in [["7","8","9","@"],["4","5","6","<"],["1","2","3",","],["0",".","-","BKSP"]] {
                                       ui.horizontal(|ui| {
-                                          for &k in row {
-                                              let btn = egui::Button::new(RichText::new(k).monospace().size(15.0).strong())
-                                                  .min_size(Vec2::new(60.0, 38.0));
-                                              if ui.add(btn).clicked() {
-                                                  if k == "BKSP" {
-                                                      if state.cmd_buf.pop().is_none() {
-                                                          push_key(ctx, Key::Backspace);
-                                                      }
-                                                  } else {
-                                                      state.cmd_buf.push_str(k);
-                                                  }
+                                          for k in row {
+                                              if ui.add(egui::Button::new(RichText::new(k).monospace().size(15.0).strong()).min_size(Vec2::new(58.0, 36.0))).clicked() {
+                                                  if k == "BKSP" { if state.cmd_buf.pop().is_none() { push_key(ctx, Key::Backspace); } }
+                                                  else { state.cmd_buf.push_str(k); }
                                               }
                                           }
                                       });
                                   }
-
-                                  ui.add_space(4.0);
-
                                   ui.horizontal_wrapped(|ui| {
-                                      let chips = [
-                                          ("@0,0", "@0,0"), ("@10<0", "@10<0"), ("Close", "c"),
-                                          ("Undo", "u"), ("Radius", "r"), ("Dia", "d"), ("2P", "2p"),
-                                      ];
-                                      for (label, kw) in chips {
-                                          if ui.button(RichText::new(label).size(12.5)).clicked() {
-                                              exec_cmdline(app, ctx, kw);
-                                          }
+                                      for (l, kw) in [("@0,0","@0,0"),("@10<0","@10<0"),("Close","c"),("Undo","u"),("Radius","r"),("Dia","d"),("2P","2p")] {
+                                          if ui.button(l).clicked() { let _ = app.cmdline(kw); }
                                       }
- 
+                                  });
+                              }
+                          }
+                      });
+              }
+
+              if state.show_radial {
+                  Window::new("Radial Menu").id(Id::new("cad_radial_win")).default_pos(egui::pos2(480.0, 320.0))
+                      .resizable(false).collapsible(false).order(Order::Foreground).show(ctx, |ui| {
+                          ui.vertical_centered(|ui| {
+                              if ui.button("LINE").clicked() { app.start("line"); state.show_radial = false; }
+                              ui.horizontal(|ui| {
+                                  if ui.button("ORTHO").clicked() { push_key(ctx, Key::F8); state.show_radial = false; }
+                                  if ui.button("CIRCLE").clicked() { app.start("circle"); state.show_radial = false; }
+                              });
+                              ui.horizontal(|ui| {
+                                  if ui.button("DIM").clicked() { app.start("dimlinear"); state.show_radial = false; }
+                                  if ui.add(egui::Button::new(RichText::new("X ESC").color(Color32::WHITE)).fill(Color32::from_rgb(175, 42, 42))).clicked() {
+                                      push_key(ctx, Key::Escape); state.show_radial = false;
+                                  }
+                                  if ui.button("TRIM").clicked() { app.start("trim"); state.show_radial = false; }
+                              });
+                              ui.horizontal(|ui| {
+                                  if ui.button("FIT").clicked() { let _ = app.cmdline("zoom e"); state.show_radial = false; }
+                                  if ui.button("ERASE").clicked() { app.start("erase"); state.show_radial = false; }
+                              });
+                              if ui.button("UNDO").clicked() { let _ = app.cmdline("u"); state.show_radial = false; }
+                          });
+                      });
+              }
+
+              if state.show_tools {
+                  Window::new("Tablet CAD Tools").id(Id::new("tablet_tools_win")).default_pos(egui::pos2(24.0, 60.0))
+                      .resizable(false).collapsible(true).order(Order::Foreground).show(ctx, |ui| {
+                          ui.horizontal(|ui| {
+                              if ui.selectable_label(state.active_tab == ToolTab::Draw, "Draw").clicked() { state.active_tab = ToolTab::Draw; }
+                              if ui.selectable_label(state.active_tab == ToolTab::Modify, "Modify").clicked() { state.active_tab = ToolTab::Modify; }
+                              if ui.selectable_label(state.active_tab == ToolTab::Annotate, "Dim").clicked() { state.active_tab = ToolTab::Annotate; }
+                              if ui.selectable_label(state.active_tab == ToolTab::View, "View").clicked() { state.active_tab = ToolTab::View; }
+                          });
+                          ui.separator();
+                          let tools: &[(&str, &str)] = match state.active_tab {
+                              ToolTab::Draw => &[("Line","line"),("PLine","pline"),("Rect","rectang"),("Circle","circle"),("Arc","arc"),("Ellipse","ellipse"),("Polygon","polygon"),("Spline","spline"),("Hatch","hatch"),("Point","point"),("XLine","xline"),("Ray","ray")],
+                              ToolTab::Modify => &[("Move","move"),("Copy","copy"),("Rotate","rotate"),("Scale","scale"),("Mirror","mirror"),("Offset","offset"),("Trim","trim"),("Extend","extend"),("Fillet","fillet"),("Chamfer","chamfer"),("Explode","explode"),("Join","join"),("Break","break"),("Array","arrayrect"),("Stretch","stretch"),("Erase","erase")],
+                              ToolTab::Annotate => &[("Dim Lin","dimlinear"),("Dim Align","dimaligned"),("Dim Ang","dimangular"),("Dim Rad","dimradius"),("Dim Dia","dimdiameter"),("Text","text"),("MText","mtext"),("Leader","leader"),("Dist","dist"),("Area","area")],
+                              ToolTab::View => &[("Zoom Fit","zoom e"),("Zoom Win","zoom w"),("Zoom Prev","zoom p"),("Regen","regen"),("Pan","pan"),("Export PDF","exportpdf"),("Save DXF","saveas"),("Open DXF","open")],
+                          };
+                          egui::Grid::new("tablet_tool_grid").spacing(Vec2::new(6.0, 6.0)).show(ui, |ui| {
+                              for (idx, &(label, cmd)) in tools.iter().enumerate() {
+                                  if ui.add(egui::Button::new(RichText::new(label).size(13.5).strong()).min_size(Vec2::new(76.0, 38.0))).clicked() {
+                                      run_cmd(app, cmd);
+                                  }
+                                  if idx % 3 == 2 { ui.end_row(); }
+                              }
+                          });
+                      });
+              }
+
+              ctx.data_mut(|d| d.insert_temp(state_id, state));
+          }
+          EOF
+
+          sed -i 's/fn ui_input(&mut self, ctx: &egui::Context) {/fn ui_input(\&mut self, ctx: \&egui::Context) {\n        crate::tablet::update(self, ctx);/' "$LIB_RS"
+          echo -e "\n#[allow(dead_code, deprecated, clippy::all)]\npub mod tablet;" >> "$LIB_RS"
+          grep -q "crate::tablet::update" "$LIB_RS"
+
+      - name: Compile CADCraft Tablet Edition to WebAssembly with Trunk
+        working-directory: cadcraft-src/apps/cadcraft-web
+        run: |
+          mkdir -p ${{ github.workspace }}/www
+          trunk build --release --dist ${{ github.workspace }}/www
+          find ${{ github.workspace }}/www -type f \( -name "*.gz" -o -name "*.br" \) -delete
+
+      - name: Inject Multi-Touch, Stylus & Export Handlers into index.html
+        run: |
+          cat << 'EOF' >> www/index.html
+          <style>
+            html, body { margin:0; padding:0; width:100vw; height:100vh; overflow:hidden; position:fixed; touch-action:none; user-select:none; -webkit-user-select:none; background:#1a1c20; }
+            canvas { display:block; width:100% !important; height:100% !important; touch-action:none; }
+            #cad-toast { position:fixed; top:16px; left:50%; transform:translateX(-50%); z-index:2147483647; background:#1b5e20; color:#fff; padding:10px 18px; border-radius:8px; font-family:sans-serif; font-size:14px; font-weight:600; display:none; pointer-events:none; }
+          </style>
+          <div id="cad-toast"></div>
+          <script>
+            function showCadToast(m) {
+              var t = document.getElementById("cad-toast"); if (!t) return;
+              t.textContent = m; t.style.display = "block";
+              clearTimeout(window._cadT); window._cadT = setTimeout(function(){ t.style.display = "none"; }, 4000);
+            }
+            (function() {
+              var canvas = null, touches = new Map(), penDown = false, pan = null, lpTimer = null, twoTap = false, twoTime = 0;
+              function getC() { if (!canvas) canvas = document.querySelector("canvas"); return canvas; }
+              function rClick(x, y) {
+                var c = getC(); if (!c) return;
+                if (navigator.vibrate) try { navigator.vibrate(35); } catch(e){}
+                c.dispatchEvent(new PointerEvent("pointerdown", { clientX:x, clientY:y, button:2, buttons:2, bubbles:true, cancelable:true, pointerType:"mouse" }));
+                c.dispatchEvent(new PointerEvent("pointerup", { clientX:x, clientY:y, button:2, buttons:0, bubbles:true, cancelable:true, pointerType:"mouse" }));
+              }
+              document.addEventListener("contextmenu", function(e) { if (e.target && e.target.tagName === "CANVAS") e.preventDefault(); }, { capture:true, passive:false });
+              window.addEventListener("pointerdown", function(e) {
+                var c = getC(); if (!c || (e.target !== c && !c.contains(e.target))) return;
+                if (e.pointerType === "pen") {
+                  penDown = true;
+                  if (e.button === 2 || e.buttons === 2) { rClick(e.clientX, e.clientY); return; }
+                  clearTimeout(lpTimer); var sx = e.clientX, sy = e.clientY;
+                  lpTimer = setTimeout(function(){ if (penDown) rClick(sx, sy); }, 480); return;
+                }
+                if (e.pointerType === "touch") {
+                  if (penDown) { e.preventDefault(); e.stopImmediatePropagation(); return; }
+                  touches.set(e.pointerId, { x:e.clientX, y:e.clientY, sx:e.clientX, sy:e.clientY });
+                  if (touches.size === 1) {
+                    var fx = e.clientX, fy = e.clientY; clearTimeout(lpTimer);
+                    lpTimer = setTimeout(function(){ if (touches.size === 1) rClick(fx, fy); }, 500);
+                  } else if (touches.size === 2) {
+                    clearTimeout(lpTimer); twoTap = true; twoTime = Date.now();
+                    var p = Array.from(touches.values());
+                    pan = { mx:(p[0].x+p[1].x)/2, my:(p[0].y+p[1].y)/2, d:Math.hypot(p[1].x-p[0].x, p[1].y-p[0].y), drag:false };
+                  } else { clearTimeout(lpTimer); twoTap = false; }
+                }
+              }, { capture:true, passive:false });
+              window.addEventListener("pointermove", function(e) {
+                var c = getC(); if (!c) return;
+                if (e.pointerType === "pen") { clearTimeout(lpTimer); return; }
+                if (e.pointerType === "touch" && touches.has(e.pointerId)) {
+                  var t = touches.get(e.pointerId); t.x = e.clientX; t.y = e.clientY;
+                  if (Math.hypot(t.x-t.sx, t.y-t.sy) > 8) { clearTimeout(lpTimer); twoTap = false; }
+                  if (touches.size === 2 && pan) {
+                    var p = Array.from(touches.values()), cmx = (p[0].x+p[1].x)/2, cmy = (p[0].y+p[1].y)/2, cd = Math.hypot(p[1].x-p[0].x, p[1].y-p[0].y);
+                    if (!pan.drag && Math.hypot(cmx-pan.mx, cmy-pan.my) > 3) {
+                      pan.drag = true;
+                      c.dispatchEvent(new PointerEvent("pointerdown", { clientX:cmx, clientY:cmy, button:1, buttons:4, bubbles:true, pointerType:"mouse" }));
+                    }
+                    if (pan.drag) c.dispatchEvent(new PointerEvent("pointermove", { clientX:cmx, clientY:cmy, button:1, buttons:4, bubbles:true, pointerType:"mouse" }));
+                    if (Math.abs(cd - pan.d) > 2) c.dispatchEvent(new WheelEvent("wheel", { clientX:cmx, clientY:cmy, deltaY:-(cd-pan.d)*4, bubbles:true, cancelable:true }));
+                    pan.mx = cmx; pan.my = cmy; pan.d = cd;
+                  }
+                }
+              }, { capture:true, passive:false });
+              function up(e) {
+                if (e.pointerType === "pen") { penDown = false; clearTimeout(lpTimer); return; }
+                if (e.pointerType === "touch") {
+                  clearTimeout(lpTimer);
+                  if (touches.size === 2 && twoTap && (Date.now() - twoTime < 280)) {
+                    var p = Array.from(touches.values()); rClick((p[0].x+p[1].x)/2, (p[0].y+p[1].y)/2);
+                  }
+                  if (pan && pan.drag && getC()) getC().dispatchEvent(new PointerEvent("pointerup", { clientX:pan.mx, clientY:pan.my, button:1, buttons:0, bubbles:true, pointerType:"mouse" }));
+                  touches.delete(e.pointerId); if (touches.size < 2) pan = null;
+                }
+              }
+              window.addEventListener("pointerup", up, { capture:true, passive:false });
+              window.addEventListener("pointercancel", up, { capture:true, passive:false });
+            })();
+            (function() {
+              var blobs = new Map(), oCreate = URL.createObjectURL.bind(URL), oRevoke = URL.revokeObjectURL.bind(URL);
+              URL.createObjectURL = function(o) { var u = oCreate(o); if (o instanceof Blob) blobs.set(u, o); return u; };
+              URL.revokeObjectURL = function(u) { setTimeout(function(){ blobs.delete(u); oRevoke(u); }, 15000); };
+              function dl(blob, name) {
+                var n = name || ("cadcraft_" + Date.now() + ".pdf"); showCadToast("Exporting " + n + "...");
+                var r = new FileReader();
+                r.onloadend = async function() {
+                  try {
+                    var b64 = r.result.split(",")[1], cap = window.Capacitor && window.Capacitor.Plugins;
+                    if (cap && cap.Filesystem) {
+                      try { await cap.Filesystem.writeFile({ path:"CADCraft/"+n, data:b64, directory:"DOCUMENTS", recursive:true }); } catch(e){}
+                      var f = await cap.Filesystem.writeFile({ path:n, data:b64, directory:"CACHE" });
+                      if (cap.Share && f && f.uri) await cap.Share.share({ title:n, url:f.uri, dialogTitle:"Save "+n });
+                    }
+                  } catch(err) { showCadToast("Export failed: " + err.message); }
+                };
+                r.readAsDataURL(blob);
+              }
+              var oClick = HTMLElement.prototype.click;
+              HTMLElement.prototype.click = function() {
+                if (this.tagName === "A" && this.href && this.href.indexOf("blob:") === 0) {
+                  var n = this.getAttribute("download") || "drawing.pdf", b = blobs.get(this.href);
+                  if (b) { dl(b, n); return; }
+                  fetch(this.href).then(function(r){ return r.blob(); }).then(function(b){ dl(b, n); }); return;
+                }
+                return oClick.apply(this, arguments);
+              };
+            })();
+          </script>
+          EOF
+
+      - name: Initialize Capacitor & Android Project
+        run: |
+          npm init -y
+          npm install @capacitor/core @capacitor/cli @capacitor/android @capacitor/filesystem @capacitor/share
+          npx cap init "CADCraft Tablet" "org.storytold.cadcraft" --web-dir=www
+          npx cap add android
+          npx cap sync android
+
+      - name: Configure Landscape Fullscreen & Large Heap Mode
+        run: |
+          sed -i 's/android:name=".MainActivity"/android:name=".MainActivity" android:screenOrientation="sensorLandscape"/g' android/app/src/main/AndroidManifest.xml
+          sed -i 's/<application/<application android:largeHeap="true"/g' android/app/src/main/AndroidManifest.xml
+
+      - name: Build Debug APK with Gradle
+        working-directory: ./android
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug
+
+      - name: Upload Tablet APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: CADCraft-Tablet-Edition-APK
+          path: android/app/build/outputs/apk/debug/app-debug.apk
