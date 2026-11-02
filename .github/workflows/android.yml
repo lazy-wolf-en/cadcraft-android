@@ -107,19 +107,19 @@ jobs:
           }
 
           pub fn update(app: &mut CadApp, ctx: &Context) {
-              let state_id = Id::new("cadcraft_tablet_state_v7");
+              let state_id = Id::new("cadcraft_tablet_state_v8");
               let mut state = ctx.data_mut(|d| d.get_temp::<TabletState>(state_id).unwrap_or_default());
 
               // 1. FLOATING MODERN TABLET DOCK
               if state.dock_minimized {
                   Window::new("CAD")
-                      .id(Id::new("cad_dock_mini_v7"))
+                      .id(Id::new("cad_dock_mini_v8"))
                       .title_bar(false)
                       .default_pos(egui::pos2(240.0, 52.0))
                       .resizable(false)
                       .order(Order::Foreground)
                       .show(ctx, |ui| {
-                          let btn = egui::Button::new(RichText::new("âš¡ CAD Tools").size(13.0).strong().color(Color32::from_rgb(0, 215, 255)))
+                          let btn = egui::Button::new(RichText::new("⚡ CAD Tools").size(13.0).strong().color(Color32::from_rgb(0, 215, 255)))
                               .fill(Color32::from_rgb(20, 26, 35))
                               .min_size(Vec2::new(96.0, 30.0));
                           if ui.add(btn).clicked() {
@@ -128,7 +128,7 @@ jobs:
                       });
               } else {
                   Window::new("CAD Dock")
-                      .id(Id::new("cad_dock_full_v7"))
+                      .id(Id::new("cad_dock_full_v8"))
                       .title_bar(false)
                       .default_pos(egui::pos2(180.0, 52.0))
                       .resizable(false)
@@ -136,7 +136,7 @@ jobs:
                       .show(ctx, |ui| {
                           ui.spacing_mut().item_spacing = Vec2::new(5.0, 4.0);
                           ui.horizontal(|ui| {
-                              if ui.add(egui::Button::new(RichText::new("â€”").size(13.0)).fill(Color32::from_rgb(32, 38, 48)).min_size(Vec2::new(26.0, 30.0))).clicked() {
+                              if ui.add(egui::Button::new(RichText::new("—").size(13.0)).fill(Color32::from_rgb(32, 38, 48)).min_size(Vec2::new(26.0, 30.0))).clicked() {
                                   state.dock_minimized = true;
                               }
 
@@ -223,7 +223,7 @@ jobs:
               // 2. TABLET TOOLS PALETTE
               if state.show_tools {
                   Window::new("Tablet CAD Tools")
-                      .id(Id::new("tablet_tools_win_v7"))
+                      .id(Id::new("tablet_tools_win_v8"))
                       .default_pos(egui::pos2(18.0, 95.0))
                       .resizable(false)
                       .collapsible(true)
@@ -275,7 +275,7 @@ jobs:
                               ],
                           };
 
-                          egui::Grid::new("tablet_tool_grid_v7").spacing(Vec2::new(6.0, 6.0)).show(ui, |ui| {
+                          egui::Grid::new("tablet_tool_grid_v8").spacing(Vec2::new(6.0, 6.0)).show(ui, |ui| {
                               for (idx, &(label, cmd)) in tools.iter().enumerate() {
                                   let btn = egui::Button::new(RichText::new(label).size(13.0).strong())
                                       .fill(Color32::from_rgb(42, 48, 58))
@@ -381,8 +381,8 @@ jobs:
 
           <!-- Top-Right Direct Triggers -->
           <div id="cad-floating-triggers">
-            <button class="cad-trigger-pill" id="btn-open-radial">â—Ž Radial</button>
-            <button class="cad-trigger-pill" id="btn-open-kb">âŒ¨ Keybd</button>
+            <button class="cad-trigger-pill" id="btn-open-radial">◎ Radial</button>
+            <button class="cad-trigger-pill" id="btn-open-kb">⌨ Keybd</button>
           </div>
 
           <!-- Native Android Keyboard Floating Input Bar -->
@@ -391,7 +391,7 @@ jobs:
               <input id="cad-native-input" type="text" inputmode="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Command, distance, @dx,dy..." />
               <button class="cad-btn cad-btn-enter" id="cad-kb-go">ENTER</button>
               <button class="cad-btn" id="cad-kb-clr">CLR</button>
-              <button class="cad-btn cad-btn-esc" id="cad-kb-hide">âœ•</button>
+              <button class="cad-btn cad-btn-esc" id="cad-kb-hide">✕</button>
             </div>
             <div id="cad-chips">
               <span class="cad-chip" data-ins="@">@</span>
@@ -405,7 +405,7 @@ jobs:
             </div>
           </div>
 
-          <!-- Circular SVG Radial Menu (Programmatically generated) -->
+          <!-- Circular SVG Radial Menu -->
           <div id="cad-radial-svg-menu">
             <svg id="cad-radial-svg-element" width="280" height="280" viewBox="0 0 280 280"></svg>
           </div>
@@ -509,7 +509,7 @@ jobs:
               hubText.setAttribute("class", "pie-text");
               hubText.setAttribute("x", 0);
               hubText.setAttribute("y", 1);
-              hubText.textContent = "âœ• ESC";
+              hubText.textContent = "✕ ESC";
               g.appendChild(hubText);
 
               svg.appendChild(g);
@@ -597,7 +597,6 @@ jobs:
               document.addEventListener("contextmenu", function(e) {
                 if (e.target && e.target.tagName === "CANVAS") {
                   e.preventDefault();
-                  // Dispatch true right-click to CADCraft
                   sendRightClickToCad(e.clientX, e.clientY);
                 }
               }, { capture: true, passive: false });
@@ -608,7 +607,7 @@ jobs:
 
                 if (e.pointerType === "pen") {
                   penDown = true; lastPenX = e.clientX; lastPenY = e.clientY;
-                  // If side barrel button pressed on touchdown
+                  // Stylus button on touchdown
                   if (e.button === 2 || (e.buttons & 2) !== 0 || (e.buttons & 32) !== 0) {
                     e.preventDefault(); e.stopImmediatePropagation();
                     window.openRadialAt(e.clientX, e.clientY);
@@ -623,7 +622,7 @@ jobs:
 
                   if (touches.size === 1) {
                     var fx = e.clientX, fy = e.clientY; clearTimeout(lpTimer);
-                    // Long press = Genuine Right Click
+                    // Long press = Right Click
                     lpTimer = setTimeout(function() {
                       if (touches.size === 1) sendRightClickToCad(fx, fy);
                     }, 500);
@@ -639,7 +638,7 @@ jobs:
                 var c = getC(); if (!c) return;
                 if (e.pointerType === "pen") {
                   lastPenX = e.clientX; lastPenY = e.clientY;
-                  // Stylus button held while moving
+                  // Stylus button while moving/hovering
                   if ((e.buttons & 2) !== 0 || (e.buttons & 32) !== 0) {
                     e.preventDefault();
                     window.openRadialAt(e.clientX, e.clientY);
@@ -751,8 +750,8 @@ jobs:
 
               @Override
               public boolean onKeyDown(int keyCode, KeyEvent event) {
-                  // KeyCode 308 = KEYCODE_STYLUS_BUTTON_PRIMARY, 309 = KEYCODE_STYLUS_BUTTON_SECONDARY
-                  if (keyCode == 308 || keyCode == 309 || keyCode == KeyEvent.KEYCODE_BUTTON_PRIMARY || keyCode == KeyEvent.KEYCODE_BUTTON_SECONDARY) {
+                  // Keycodes 308-311: STYLUS_BUTTON_PRIMARY, SECONDARY, TERTIARY, TAIL
+                  if (keyCode >= 308 && keyCode <= 311) {
                       notifyStylusRadial(-1, -1);
                       return true;
                   }
@@ -764,6 +763,7 @@ jobs:
                   if ((event.getSource() & InputDevice.SOURCE_STYLUS) == InputDevice.SOURCE_STYLUS ||
                       (event.getSource() & InputDevice.SOURCE_BLUETOOTH_STYLUS) == InputDevice.SOURCE_BLUETOOTH_STYLUS) {
                       int buttonState = event.getButtonState();
+                      // 32 = BUTTON_STYLUS_PRIMARY, 64 = BUTTON_STYLUS_SECONDARY, 2 = BUTTON_SECONDARY
                       if ((buttonState & MotionEvent.BUTTON_STYLUS_PRIMARY) != 0 ||
                           (buttonState & MotionEvent.BUTTON_STYLUS_SECONDARY) != 0 ||
                           (buttonState & MotionEvent.BUTTON_SECONDARY) != 0) {
