@@ -107,19 +107,19 @@ jobs:
           }
 
           pub fn update(app: &mut CadApp, ctx: &Context) {
-              let state_id = Id::new("cadcraft_tablet_state_v6");
+              let state_id = Id::new("cadcraft_tablet_state_v7");
               let mut state = ctx.data_mut(|d| d.get_temp::<TabletState>(state_id).unwrap_or_default());
 
-              // 1. FLOATING MODERN TABLET DOCK (Top of Canvas)
+              // 1. FLOATING MODERN TABLET DOCK
               if state.dock_minimized {
                   Window::new("CAD")
-                      .id(Id::new("cad_dock_mini_v6"))
+                      .id(Id::new("cad_dock_mini_v7"))
                       .title_bar(false)
                       .default_pos(egui::pos2(240.0, 52.0))
                       .resizable(false)
                       .order(Order::Foreground)
                       .show(ctx, |ui| {
-                          let btn = egui::Button::new(RichText::new("⚡ CAD Tools").size(13.0).strong().color(Color32::from_rgb(0, 215, 255)))
+                          let btn = egui::Button::new(RichText::new("âš¡ CAD Tools").size(13.0).strong().color(Color32::from_rgb(0, 215, 255)))
                               .fill(Color32::from_rgb(20, 26, 35))
                               .min_size(Vec2::new(96.0, 30.0));
                           if ui.add(btn).clicked() {
@@ -128,7 +128,7 @@ jobs:
                       });
               } else {
                   Window::new("CAD Dock")
-                      .id(Id::new("cad_dock_full_v6"))
+                      .id(Id::new("cad_dock_full_v7"))
                       .title_bar(false)
                       .default_pos(egui::pos2(180.0, 52.0))
                       .resizable(false)
@@ -136,7 +136,7 @@ jobs:
                       .show(ctx, |ui| {
                           ui.spacing_mut().item_spacing = Vec2::new(5.0, 4.0);
                           ui.horizontal(|ui| {
-                              if ui.add(egui::Button::new(RichText::new("—").size(13.0)).fill(Color32::from_rgb(32, 38, 48)).min_size(Vec2::new(26.0, 30.0))).clicked() {
+                              if ui.add(egui::Button::new(RichText::new("â€”").size(13.0)).fill(Color32::from_rgb(32, 38, 48)).min_size(Vec2::new(26.0, 30.0))).clicked() {
                                   state.dock_minimized = true;
                               }
 
@@ -150,20 +150,6 @@ jobs:
                                   .min_size(Vec2::new(52.0, 30.0));
                               if ui.add(tools_btn).clicked() {
                                   state.show_tools = !state.show_tools;
-                              }
-
-                              let rad_btn = egui::Button::new(RichText::new("◎ Radial").size(13.0).strong().color(Color32::from_rgb(0, 235, 255)))
-                                  .fill(c_idle)
-                                  .min_size(Vec2::new(66.0, 30.0));
-                              if ui.add(rad_btn).clicked() {
-                                  push_key(ctx, Key::F9);
-                              }
-
-                              let kb_btn = egui::Button::new(RichText::new("⌨ Keybd").size(13.0).strong().color(Color32::from_rgb(130, 245, 175)))
-                                  .fill(c_idle)
-                                  .min_size(Vec2::new(66.0, 30.0));
-                              if ui.add(kb_btn).clicked() {
-                                  push_key(ctx, Key::F12);
                               }
 
                               ui.separator();
@@ -200,7 +186,7 @@ jobs:
                               };
                               let enter_btn = egui::Button::new(RichText::new(enter_txt).size(13.0).strong().color(Color32::WHITE))
                                   .fill(Color32::from_rgb(24, 140, 60))
-                                  .min_size(Vec2::new(88.0, 30.0));
+                                  .min_size(Vec2::new(96.0, 30.0));
                               if ui.add(enter_btn).on_hover_text("Confirm or repeat last command").clicked() {
                                   if state.cmd_buf.is_empty() {
                                       let _ = app.cmdline("");
@@ -237,7 +223,7 @@ jobs:
               // 2. TABLET TOOLS PALETTE
               if state.show_tools {
                   Window::new("Tablet CAD Tools")
-                      .id(Id::new("tablet_tools_win_v6"))
+                      .id(Id::new("tablet_tools_win_v7"))
                       .default_pos(egui::pos2(18.0, 95.0))
                       .resizable(false)
                       .collapsible(true)
@@ -289,7 +275,7 @@ jobs:
                               ],
                           };
 
-                          egui::Grid::new("tablet_tool_grid_v6").spacing(Vec2::new(6.0, 6.0)).show(ui, |ui| {
+                          egui::Grid::new("tablet_tool_grid_v7").spacing(Vec2::new(6.0, 6.0)).show(ui, |ui| {
                               for (idx, &(label, cmd)) in tools.iter().enumerate() {
                                   let btn = egui::Button::new(RichText::new(label).size(13.0).strong())
                                       .fill(Color32::from_rgb(42, 48, 58))
@@ -326,65 +312,86 @@ jobs:
             canvas { display:block; width:100% !important; height:100% !important; touch-action:none; }
             #cad-toast { position:fixed; top:14px; left:50%; transform:translateX(-50%); z-index:2147483647; background:#1b5e20; color:#fff; padding:8px 16px; border-radius:8px; font-family:sans-serif; font-size:13px; font-weight:600; display:none; pointer-events:none; box-shadow:0 4px 12px rgba(0,0,0,0.5); }
 
+            /* FLOATING ACTION BAR FOR KEYBOARD & RADIAL */
+            #cad-floating-triggers {
+              position: fixed; top: 52px; right: 80px; z-index: 2147483630;
+              display: flex; gap: 8px; align-items: center;
+            }
+            .cad-trigger-pill {
+              height: 32px; padding: 0 14px; border-radius: 8px; font-family: system-ui, sans-serif;
+              font-size: 13px; font-weight: 700; border: 1.2px solid rgba(255,255,255,0.18);
+              box-shadow: 0 4px 12px rgba(0,0,0,0.5); cursor: pointer; display: flex; align-items: center; gap: 6px;
+            }
+            #btn-open-radial { background: #1c2636; color: #00d9ff; border-color: #0099cc; }
+            #btn-open-radial:active { background: #0099cc; color: #fff; }
+            #btn-open-kb { background: #1a2a22; color: #00ffaa; border-color: #1b8a4f; }
+            #btn-open-kb:active { background: #1b8a4f; color: #fff; }
+
             /* NATIVE ANDROID KEYBOARD INPUT OVERLAY */
             #cad-android-kb-overlay {
-              position:fixed; top:96px; left:50%; transform:translateX(-50%);
-              z-index:2147483640; background:rgba(20, 24, 32, 0.96);
-              border:1.5px solid #0099ff; border-radius:12px; padding:10px;
-              display:none; flex-direction:column; gap:8px; box-shadow:0 8px 24px rgba(0,0,0,0.65);
-              font-family:system-ui, sans-serif;
+              position: fixed; top: 96px; left: 50%; transform: translateX(-50%);
+              z-index: 2147483640; background: rgba(20, 25, 34, 0.97);
+              border: 1.5px solid #0099ff; border-radius: 12px; padding: 10px;
+              display: none; flex-direction: column; gap: 8px; box-shadow: 0 8px 24px rgba(0,0,0,0.65);
+              font-family: system-ui, sans-serif;
             }
-            #cad-kb-row { display:flex; align-items:center; gap:6px; }
+            #cad-kb-row { display: flex; align-items: center; gap: 6px; }
             #cad-native-input {
-              width:260px; height:36px; background:#0e1117; color:#00ff99;
-              border:1px solid #3e4c5e; border-radius:6px; padding:0 10px;
-              font-family:monospace; font-size:15px; outline:none;
-              user-select:text !important; -webkit-user-select:text !important;
+              width: 270px; height: 38px; background: #0d1117; color: #00ffaa;
+              border: 1.2px solid #3e4c5e; border-radius: 7px; padding: 0 12px;
+              font-family: monospace; font-size: 15px; outline: none;
+              user-select: text !important; -webkit-user-select: text !important;
             }
             .cad-btn {
-              height:36px; padding:0 12px; border-radius:6px; border:none;
-              background:#28303d; color:#fff; font-weight:600; font-size:13px; cursor:pointer;
+              height: 38px; padding: 0 14px; border-radius: 7px; border: none;
+              background: #28303d; color: #fff; font-weight: 600; font-size: 13px; cursor: pointer;
             }
-            .cad-btn-enter { background:#188a3e; }
-            .cad-btn-esc { background:#b42828; }
-            #cad-chips { display:flex; gap:6px; flex-wrap:wrap; }
+            .cad-btn-enter { background: #188a3e; font-weight: 700; }
+            .cad-btn-esc { background: #b42828; }
+            #cad-chips { display: flex; gap: 6px; flex-wrap: wrap; }
             .cad-chip {
-              padding:4px 8px; border-radius:6px; background:#1e2430; color:#80d4ff;
-              border:1px solid #334155; font-size:12px; font-family:monospace; font-weight:600; cursor:pointer;
+              padding: 5px 9px; border-radius: 6px; background: #1e2430; color: #80d4ff;
+              border: 1px solid #334155; font-size: 12.5px; font-family: monospace; font-weight: 600; cursor: pointer;
             }
 
             /* AUTHENTIC CIRCULAR RADIAL PIE MENU */
             #cad-radial-svg-menu {
-              position:fixed; width:260px; height:260px; z-index:2147483645;
-              display:none; transform:translate(-50%, -50%);
-              filter:drop-shadow(0 10px 25px rgba(0,0,0,0.7));
+              position: fixed; width: 280px; height: 280px; z-index: 2147483645;
+              display: none; transform: translate(-50%, -50%);
+              filter: drop-shadow(0 12px 30px rgba(0,0,0,0.75));
             }
             .pie-slice {
-              fill: rgba(24, 30, 40, 0.94); stroke: rgba(0, 180, 255, 0.4); stroke-width: 1.5;
-              cursor: pointer; transition: fill 0.15s;
+              fill: rgba(22, 28, 38, 0.95); stroke: rgba(0, 180, 255, 0.35); stroke-width: 1.5;
+              cursor: pointer; transition: fill 0.12s, stroke 0.12s;
             }
             .pie-slice:hover, .pie-slice:active {
-              fill: rgba(0, 120, 215, 0.95); stroke: #ffffff; stroke-width: 2.2;
+              fill: rgba(0, 120, 215, 0.98); stroke: #ffffff; stroke-width: 2.2;
             }
             .pie-text {
-              fill: #ffffff; font-family: system-ui, sans-serif; font-size: 11.5px;
+              fill: #ffffff; font-family: system-ui, sans-serif; font-size: 12px;
               font-weight: 700; pointer-events: none; text-anchor: middle; dominant-baseline: middle;
             }
             .pie-hub {
-              fill: #b42828; stroke: #ff9999; stroke-width: 2; cursor: pointer;
+              fill: #c62828; stroke: #ff9999; stroke-width: 2.2; cursor: pointer;
             }
-            .pie-hub:hover, .pie-hub:active { fill: #d93838; }
+            .pie-hub:hover, .pie-hub:active { fill: #e53935; }
           </style>
 
           <div id="cad-toast"></div>
 
-          <!-- Native Android Keyboard Floating Bridge -->
+          <!-- Top-Right Direct Triggers -->
+          <div id="cad-floating-triggers">
+            <button class="cad-trigger-pill" id="btn-open-radial">â—Ž Radial</button>
+            <button class="cad-trigger-pill" id="btn-open-kb">âŒ¨ Keybd</button>
+          </div>
+
+          <!-- Native Android Keyboard Floating Input Bar -->
           <div id="cad-android-kb-overlay">
             <div id="cad-kb-row">
               <input id="cad-native-input" type="text" inputmode="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Command, distance, @dx,dy..." />
               <button class="cad-btn cad-btn-enter" id="cad-kb-go">ENTER</button>
               <button class="cad-btn" id="cad-kb-clr">CLR</button>
-              <button class="cad-btn cad-btn-esc" id="cad-kb-hide">✕</button>
+              <button class="cad-btn cad-btn-esc" id="cad-kb-hide">âœ•</button>
             </div>
             <div id="cad-chips">
               <span class="cad-chip" data-ins="@">@</span>
@@ -398,48 +405,9 @@ jobs:
             </div>
           </div>
 
-          <!-- Circular SVG Radial Menu -->
+          <!-- Circular SVG Radial Menu (Programmatically generated) -->
           <div id="cad-radial-svg-menu">
-            <svg width="260" height="260" viewBox="0 0 260 260">
-              <g transform="translate(130, 130)">
-                <!-- 8 Radial Wedges: Outer R=125, Inner R=42 -->
-                <!-- 0: LINE (North) -->
-                <path class="pie-slice" data-cmd="line" d="M -23.7 -34.8 L -69.6 -103.9 A 125 125 0 0 1 69.6 -103.9 L 23.7 -34.8 A 42 42 0 0 0 -23.7 -34.8 Z"/>
-                <text class="pie-text" x="0" y="-80">LINE</text>
-
-                <!-- 1: CIRCLE (NE) -->
-                <path class="pie-slice" data-cmd="circle" d="M 23.7 -34.8 L 69.6 -103.9 A 125 125 0 0 1 125.0 0 L 42.0 0 A 42 42 0 0 0 23.7 -34.8 Z"/>
-                <text class="pie-text" x="65" y="-48">CIRCLE</text>
-
-                <!-- 2: TRIM (East) -->
-                <path class="pie-slice" data-cmd="trim" d="M 42.0 0 L 125.0 0 A 125 125 0 0 1 69.6 103.9 L 23.7 34.8 A 42 42 0 0 0 42.0 0 Z"/>
-                <text class="pie-text" x="80" y="24">TRIM</text>
-
-                <!-- 3: ERASE (SE) -->
-                <path class="pie-slice" data-cmd="erase" d="M 23.7 34.8 L 69.6 103.9 A 125 125 0 0 1 0 125.0 L 0 42.0 A 42 42 0 0 0 23.7 34.8 Z"/>
-                <text class="pie-text" x="48" y="74">ERASE</text>
-
-                <!-- 4: UNDO (South) -->
-                <path class="pie-slice" data-cmd="u" d="M 0 42.0 L 0 125.0 A 125 125 0 0 1 -69.6 103.9 L -23.7 34.8 A 42 42 0 0 0 0 42.0 Z"/>
-                <text class="pie-text" x="-32" y="74">UNDO</text>
-
-                <!-- 5: FIT (SW) -->
-                <path class="pie-slice" data-cmd="zoom e" d="M -23.7 34.8 L -69.6 103.9 A 125 125 0 0 1 -125.0 0 L -42.0 0 A 42 42 0 0 0 -23.7 34.8 Z"/>
-                <text class="pie-text" x="-80" y="24">FIT</text>
-
-                <!-- 6: DIM (West) -->
-                <path class="pie-slice" data-cmd="dimlinear" d="M -42.0 0 L -125.0 0 A 125 125 0 0 1 -69.6 -103.9 L -23.7 -34.8 A 42 42 0 0 0 -42.0 0 Z"/>
-                <text class="pie-text" x="-65" y="-48">DIM</text>
-
-                <!-- 7: PLINE (NW) -->
-                <path class="pie-slice" data-cmd="pline" d="M -69.6 -103.9 L -23.7 -34.8 A 42 42 0 0 0 -42.0 0 L -125.0 0 A 125 125 0 0 1 -69.6 -103.9 Z"/>
-                <text class="pie-text" x="-28" y="-76">PLINE</text>
-
-                <!-- Central ESC / Close Hub -->
-                <circle class="pie-hub" id="cad-radial-hub" cx="0" cy="0" r="38"/>
-                <text class="pie-text" x="0" y="1">✕ ESC</text>
-              </g>
-            </svg>
+            <svg id="cad-radial-svg-element" width="280" height="280" viewBox="0 0 280 280"></svg>
           </div>
 
           <script>
@@ -462,49 +430,134 @@ jobs:
               c.dispatchEvent(new KeyboardEvent("keyup", { key: "Enter", code: "Enter", keyCode: 13, which: 13, bubbles: true }));
             }
 
+            function sendRightClickToCad(x, y) {
+              var c = document.querySelector("canvas"); if (!c) return;
+              if (navigator.vibrate) try { navigator.vibrate(30); } catch(e){}
+              c.dispatchEvent(new PointerEvent("pointerdown", { clientX: x, clientY: y, button: 2, buttons: 2, bubbles: true, cancelable: true, pointerType: "mouse" }));
+              c.dispatchEvent(new PointerEvent("pointerup", { clientX: x, clientY: y, button: 2, buttons: 0, bubbles: true, cancelable: true, pointerType: "mouse" }));
+            }
+
+            // Generate Precise Radial Pie Slices
+            (function buildRadialSvg() {
+              var svg = document.getElementById("cad-radial-svg-element");
+              var cx = 140, cy = 140, rIn = 42, rOut = 132;
+              var items = [
+                { label: "LINE", cmd: "line", angle: -90 },
+                { label: "CIRCLE", cmd: "circle", angle: -45 },
+                { label: "TRIM", cmd: "trim", angle: 0 },
+                { label: "ERASE", cmd: "erase", angle: 45 },
+                { label: "UNDO", cmd: "u", angle: 90 },
+                { label: "FIT", cmd: "zoom e", angle: 135 },
+                { label: "DIM", cmd: "dimlinear", angle: 180 },
+                { label: "PLINE", cmd: "pline", angle: -135 }
+              ];
+
+              var g = document.createElementNS("http://www.w3.org/2000/svg", "g");
+              g.setAttribute("transform", "translate(" + cx + "," + cy + ")");
+
+              items.forEach(function(item) {
+                var halfSpan = 20; // 40 deg total span, 5 deg gap between slices
+                var a1 = (item.angle - halfSpan) * Math.PI / 180;
+                var a2 = (item.angle + halfSpan) * Math.PI / 180;
+
+                var x1 = rIn * Math.cos(a1), y1 = rIn * Math.sin(a1);
+                var x2 = rOut * Math.cos(a1), y2 = rOut * Math.sin(a1);
+                var x3 = rOut * Math.cos(a2), y3 = rOut * Math.sin(a2);
+                var x4 = rIn * Math.cos(a2), y4 = rIn * Math.sin(a2);
+
+                var d = "M " + x1 + " " + y1 + " L " + x2 + " " + y2 + " A " + rOut + " " + rOut + " 0 0 1 " + x3 + " " + y3 + " L " + x4 + " " + y4 + " A " + rIn + " " + rIn + " 0 0 0 " + x1 + " " + y1 + " Z";
+
+                var path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+                path.setAttribute("class", "pie-slice");
+                path.setAttribute("d", d);
+                path.setAttribute("data-cmd", item.cmd);
+                path.addEventListener("click", function(e) {
+                  e.stopPropagation();
+                  window.closeRadial();
+                  sendCadCommand(item.cmd);
+                });
+                g.appendChild(path);
+
+                var midA = item.angle * Math.PI / 180;
+                var rMid = (rIn + rOut) / 2;
+                var tx = rMid * Math.cos(midA);
+                var ty = rMid * Math.sin(midA);
+
+                var text = document.createElementNS("http://www.w3.org/2000/svg", "text");
+                text.setAttribute("class", "pie-text");
+                text.setAttribute("x", tx);
+                text.setAttribute("y", ty);
+                text.textContent = item.label;
+                g.appendChild(text);
+              });
+
+              // Central ESC hub
+              var hub = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+              hub.setAttribute("class", "pie-hub");
+              hub.setAttribute("cx", 0);
+              hub.setAttribute("cy", 0);
+              hub.setAttribute("r", rIn - 4);
+              hub.addEventListener("click", function(e) {
+                e.stopPropagation();
+                window.closeRadial();
+                var c = document.querySelector("canvas");
+                if (c) c.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", code: "Escape", keyCode: 27, bubbles: true }));
+              });
+              g.appendChild(hub);
+
+              var hubText = document.createElementNS("http://www.w3.org/2000/svg", "text");
+              hubText.setAttribute("class", "pie-text");
+              hubText.setAttribute("x", 0);
+              hubText.setAttribute("y", 1);
+              hubText.textContent = "âœ• ESC";
+              g.appendChild(hubText);
+
+              svg.appendChild(g);
+            })();
+
             // Radial Pie Menu Controller
             var radialEl = document.getElementById("cad-radial-svg-menu");
-            function openRadialAt(x, y) {
+            window.openRadialAt = function(x, y) {
               if (!radialEl) return;
-              var cx = Math.max(140, Math.min(window.innerWidth - 140, x));
-              var cy = Math.max(140, Math.min(window.innerHeight - 140, y));
+              var posX = (x && x > 0) ? x : (window.innerWidth / 2);
+              var posY = (y && y > 0) ? y : (window.innerHeight / 2);
+              var cx = Math.max(150, Math.min(window.innerWidth - 150, posX));
+              var cy = Math.max(150, Math.min(window.innerHeight - 150, posY));
               radialEl.style.left = cx + "px";
               radialEl.style.top = cy + "px";
               radialEl.style.display = "block";
               if (navigator.vibrate) try { navigator.vibrate(28); } catch(e){}
-            }
-            function closeRadial() { if (radialEl) radialEl.style.display = "none"; }
+            };
+            window.closeRadial = function() {
+              if (radialEl) radialEl.style.display = "none";
+            };
 
-            document.getElementById("cad-radial-hub").addEventListener("click", function(e) {
-              e.stopPropagation(); closeRadial();
-              var c = document.querySelector("canvas");
-              if (c) c.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", code: "Escape", keyCode: 27, bubbles: true }));
+            document.getElementById("btn-open-radial").addEventListener("click", function(e) {
+              e.stopPropagation();
+              if (radialEl.style.display === "block") window.closeRadial();
+              else window.openRadialAt(window.innerWidth / 2, window.innerHeight / 2);
             });
-
-            var pieSlices = document.querySelectorAll(".pie-slice");
-            for (var i = 0; i < pieSlices.length; i++) {
-              pieSlices[i].addEventListener("click", function(e) {
-                e.stopPropagation();
-                var cmd = this.getAttribute("data-cmd");
-                closeRadial();
-                if (cmd) sendCadCommand(cmd);
-              });
-            }
 
             // Android Native Keyboard Controller
             var kbOverlay = document.getElementById("cad-android-kb-overlay");
             var nativeInp = document.getElementById("cad-native-input");
 
-            function toggleAndroidKeyboard() {
+            function showAndroidKeyboard() {
               if (!kbOverlay || !nativeInp) return;
               if (kbOverlay.style.display === "flex") {
                 nativeInp.blur();
                 kbOverlay.style.display = "none";
               } else {
                 kbOverlay.style.display = "flex";
-                setTimeout(function() { nativeInp.focus(); }, 50);
+                nativeInp.focus();
+                nativeInp.select();
               }
             }
+
+            document.getElementById("btn-open-kb").addEventListener("click", function(e) {
+              e.stopPropagation();
+              showAndroidKeyboard();
+            });
 
             function submitNativeInput() {
               var val = nativeInp.value.trim();
@@ -519,7 +572,6 @@ jobs:
               if (e.key === "Enter") { e.preventDefault(); submitNativeInput(); }
               else if (e.key === "Escape") { nativeInp.blur(); kbOverlay.style.display = "none"; }
             });
-            nativeInp.addEventListener("keyup", function(e) { e.stopPropagation(); });
 
             document.getElementById("cad-kb-go").addEventListener("click", submitNativeInput);
             document.getElementById("cad-kb-clr").addEventListener("click", function() { nativeInp.value = ""; nativeInp.focus(); });
@@ -535,63 +587,50 @@ jobs:
               });
             }
 
-            // Bridge F-keys dispatched from Rust Dock
-            window.addEventListener("keydown", function(e) {
-              if (e.key === "F9") {
-                if (radialEl.style.display === "block") closeRadial();
-                else openRadialAt(window.innerWidth / 2, window.innerHeight / 2);
-              } else if (e.key === "F12") {
-                toggleAndroidKeyboard();
-              }
-            });
-
-            // Stylus Barrel Button, Multi-Touch & Palm Rejection
+            // Touch, Stylus & Genuine Right-Click Management
             (function() {
               var canvas = null, touches = new Map(), penDown = false, pan = null, lpTimer = null, twoTap = false, twoTime = 0;
-              var lastPenX = window.innerWidth / 2, lastPenY = window.innerHeight / 2, lastBarrelTime = 0;
+              var lastPenX = window.innerWidth / 2, lastPenY = window.innerHeight / 2;
               function getC() { if (!canvas) canvas = document.querySelector("canvas"); return canvas; }
 
-              // Stylus Barrel Side Button Trigger
+              // Restored genuine Right-Click for Mouse & Long-Press
               document.addEventListener("contextmenu", function(e) {
-                if (e.target && (e.target.tagName === "CANVAS" || e.target.id === "cad-radial-svg-menu")) {
-                  e.preventDefault(); e.stopImmediatePropagation();
-                  var now = Date.now();
-                  if (now - lastBarrelTime > 250) {
-                    lastBarrelTime = now;
-                    openRadialAt(e.clientX || lastPenX, e.clientY || lastPenY);
-                  }
+                if (e.target && e.target.tagName === "CANVAS") {
+                  e.preventDefault();
+                  // Dispatch true right-click to CADCraft
+                  sendRightClickToCad(e.clientX, e.clientY);
                 }
               }, { capture: true, passive: false });
 
               window.addEventListener("pointerdown", function(e) {
-                if (radialEl.style.display === "block" && !radialEl.contains(e.target)) closeRadial();
+                if (radialEl.style.display === "block" && !radialEl.contains(e.target)) window.closeRadial();
                 var c = getC(); if (!c || (e.target !== c && !c.contains(e.target))) return;
 
                 if (e.pointerType === "pen") {
                   penDown = true; lastPenX = e.clientX; lastPenY = e.clientY;
-                  // Side barrel button pressed during touchdown
+                  // If side barrel button pressed on touchdown
                   if (e.button === 2 || (e.buttons & 2) !== 0 || (e.buttons & 32) !== 0) {
                     e.preventDefault(); e.stopImmediatePropagation();
-                    lastBarrelTime = Date.now();
-                    openRadialAt(e.clientX, e.clientY);
+                    window.openRadialAt(e.clientX, e.clientY);
                     return;
                   }
-                  clearTimeout(lpTimer);
-                  var sx = e.clientX, sy = e.clientY;
-                  lpTimer = setTimeout(function(){ if (penDown) openRadialAt(sx, sy); }, 520);
                   return;
                 }
 
                 if (e.pointerType === "touch") {
                   if (penDown) { e.preventDefault(); e.stopImmediatePropagation(); return; }
-                  touches.set(e.pointerId, { x:e.clientX, y:e.clientY, sx:e.clientX, sy:e.clientY });
+                  touches.set(e.pointerId, { x: e.clientX, y: e.clientY, sx: e.clientX, sy: e.clientY });
+
                   if (touches.size === 1) {
                     var fx = e.clientX, fy = e.clientY; clearTimeout(lpTimer);
-                    lpTimer = setTimeout(function(){ if (touches.size === 1) openRadialAt(fx, fy); }, 550);
+                    // Long press = Genuine Right Click
+                    lpTimer = setTimeout(function() {
+                      if (touches.size === 1) sendRightClickToCad(fx, fy);
+                    }, 500);
                   } else if (touches.size === 2) {
                     clearTimeout(lpTimer); twoTap = true; twoTime = Date.now();
                     var p = Array.from(touches.values());
-                    pan = { mx:(p[0].x+p[1].x)/2, my:(p[0].y+p[1].y)/2, d:Math.hypot(p[1].x-p[0].x, p[1].y-p[0].y), drag:false };
+                    pan = { mx: (p[0].x+p[1].x)/2, my: (p[0].y+p[1].y)/2, d: Math.hypot(p[1].x-p[0].x, p[1].y-p[0].y), drag: false };
                   } else { clearTimeout(lpTimer); twoTap = false; }
                 }
               }, { capture: true, passive: false });
@@ -599,45 +638,41 @@ jobs:
               window.addEventListener("pointermove", function(e) {
                 var c = getC(); if (!c) return;
                 if (e.pointerType === "pen") {
-                  if (Math.hypot(e.clientX - lastPenX, e.clientY - lastPenY) > 8) clearTimeout(lpTimer);
                   lastPenX = e.clientX; lastPenY = e.clientY;
-                  // Hovering with barrel button held
+                  // Stylus button held while moving
                   if ((e.buttons & 2) !== 0 || (e.buttons & 32) !== 0) {
-                    var now = Date.now();
-                    if (now - lastBarrelTime > 300) {
-                      lastBarrelTime = now;
-                      e.preventDefault();
-                      openRadialAt(e.clientX, e.clientY);
-                    }
+                    e.preventDefault();
+                    window.openRadialAt(e.clientX, e.clientY);
                   }
                   return;
                 }
 
                 if (e.pointerType === "touch" && touches.has(e.pointerId)) {
                   var t = touches.get(e.pointerId); t.x = e.clientX; t.y = e.clientY;
-                  if (Math.hypot(t.x-t.sx, t.y-t.sy) > 8) { clearTimeout(lpTimer); twoTap = false; }
+                  if (Math.hypot(t.x - t.sx, t.y - t.sy) > 8) { clearTimeout(lpTimer); twoTap = false; }
                   if (touches.size === 2 && pan) {
                     var p = Array.from(touches.values()), cmx = (p[0].x+p[1].x)/2, cmy = (p[0].y+p[1].y)/2, cd = Math.hypot(p[1].x-p[0].x, p[1].y-p[0].y);
                     if (!pan.drag && Math.hypot(cmx-pan.mx, cmy-pan.my) > 3) {
                       pan.drag = true;
-                      c.dispatchEvent(new PointerEvent("pointerdown", { clientX:cmx, clientY:cmy, button:1, buttons:4, bubbles:true, pointerType:"mouse" }));
+                      c.dispatchEvent(new PointerEvent("pointerdown", { clientX: cmx, clientY: cmy, button: 1, buttons: 4, bubbles: true, pointerType: "mouse" }));
                     }
-                    if (pan.drag) c.dispatchEvent(new PointerEvent("pointermove", { clientX:cmx, clientY:cmy, button:1, buttons:4, bubbles:true, pointerType:"mouse" }));
-                    if (Math.abs(cd - pan.d) > 2) c.dispatchEvent(new WheelEvent("wheel", { clientX:cmx, clientY:cmy, deltaY:-(cd-pan.d)*4, bubbles:true, cancelable:true }));
+                    if (pan.drag) c.dispatchEvent(new PointerEvent("pointermove", { clientX: cmx, clientY: cmy, button: 1, buttons: 4, bubbles: true, pointerType: "mouse" }));
+                    if (Math.abs(cd - pan.d) > 2) c.dispatchEvent(new WheelEvent("wheel", { clientX: cmx, clientY: cmy, deltaY: -(cd-pan.d)*4, bubbles: true, cancelable: true }));
                     pan.mx = cmx; pan.my = cmy; pan.d = cd;
                   }
                 }
               }, { capture: true, passive: false });
 
               function handleUp(e) {
-                if (e.pointerType === "pen") { penDown = false; clearTimeout(lpTimer); return; }
+                if (e.pointerType === "pen") { penDown = false; return; }
                 if (e.pointerType === "touch") {
                   clearTimeout(lpTimer);
+                  // Two finger tap = Right click
                   if (touches.size === 2 && twoTap && (Date.now() - twoTime < 280)) {
-                    var p = Array.from(touches.values()); openRadialAt((p[0].x+p[1].x)/2, (p[0].y+p[1].y)/2);
+                    var p = Array.from(touches.values()); sendRightClickToCad((p[0].x+p[1].x)/2, (p[0].y+p[1].y)/2);
                   }
                   if (pan && pan.drag && getC()) {
-                    getC().dispatchEvent(new PointerEvent("pointerup", { clientX:pan.mx, clientY:pan.my, button:1, buttons:0, bubbles:true, pointerType:"mouse" }));
+                    getC().dispatchEvent(new PointerEvent("pointerup", { clientX: pan.mx, clientY: pan.my, button: 1, buttons: 0, bubbles: true, pointerType: "mouse" }));
                   }
                   touches.delete(e.pointerId); if (touches.size < 2) pan = null;
                 }
@@ -686,6 +721,75 @@ jobs:
           npx cap init "CADCraft Tablet" "org.storytold.cadcraft" --web-dir=www
           npx cap add android
           npx cap sync android
+
+      - name: Inject OnePlus Stylus Hardware Button Listener (MainActivity.java)
+        run: |
+          cat << 'EOF' > android/app/src/main/java/org/storytold/cadcraft/MainActivity.java
+          package org.storytold.cadcraft;
+
+          import android.os.Bundle;
+          import android.view.InputDevice;
+          import android.view.KeyEvent;
+          import android.view.MotionEvent;
+          import com.getcapacitor.BridgeActivity;
+
+          public class MainActivity extends BridgeActivity {
+              private long lastStylusTime = 0;
+
+              private void notifyStylusRadial(final float x, final float y) {
+                  long now = System.currentTimeMillis();
+                  if (now - lastStylusTime < 350) return;
+                  lastStylusTime = now;
+                  runOnUiThread(() -> {
+                      if (getBridge() != null && getBridge().getWebView() != null) {
+                          getBridge().getWebView().evaluateJavascript(
+                              "if(window.openRadialAt){ window.openRadialAt(" + x + "," + y + "); }", null
+                          );
+                      }
+                  });
+              }
+
+              @Override
+              public boolean onKeyDown(int keyCode, KeyEvent event) {
+                  // KeyCode 308 = KEYCODE_STYLUS_BUTTON_PRIMARY, 309 = KEYCODE_STYLUS_BUTTON_SECONDARY
+                  if (keyCode == 308 || keyCode == 309 || keyCode == KeyEvent.KEYCODE_BUTTON_PRIMARY || keyCode == KeyEvent.KEYCODE_BUTTON_SECONDARY) {
+                      notifyStylusRadial(-1, -1);
+                      return true;
+                  }
+                  return super.onKeyDown(keyCode, event);
+              }
+
+              @Override
+              public boolean dispatchGenericMotionEvent(MotionEvent event) {
+                  if ((event.getSource() & InputDevice.SOURCE_STYLUS) == InputDevice.SOURCE_STYLUS ||
+                      (event.getSource() & InputDevice.SOURCE_BLUETOOTH_STYLUS) == InputDevice.SOURCE_BLUETOOTH_STYLUS) {
+                      int buttonState = event.getButtonState();
+                      if ((buttonState & MotionEvent.BUTTON_STYLUS_PRIMARY) != 0 ||
+                          (buttonState & MotionEvent.BUTTON_STYLUS_SECONDARY) != 0 ||
+                          (buttonState & MotionEvent.BUTTON_SECONDARY) != 0) {
+                          notifyStylusRadial(event.getX(), event.getY());
+                          return true;
+                      }
+                  }
+                  return super.dispatchGenericMotionEvent(event);
+              }
+
+              @Override
+              public boolean dispatchTouchEvent(MotionEvent event) {
+                  int toolType = event.getToolType(0);
+                  if (toolType == MotionEvent.TOOL_TYPE_STYLUS || toolType == MotionEvent.TOOL_TYPE_ERASER) {
+                      int buttonState = event.getButtonState();
+                      if ((buttonState & MotionEvent.BUTTON_STYLUS_PRIMARY) != 0 ||
+                          (buttonState & MotionEvent.BUTTON_STYLUS_SECONDARY) != 0 ||
+                          (buttonState & MotionEvent.BUTTON_SECONDARY) != 0) {
+                          notifyStylusRadial(event.getX(), event.getY());
+                          return true;
+                      }
+                  }
+                  return super.dispatchTouchEvent(event);
+              }
+          }
+          EOF
 
       - name: Configure Landscape Fullscreen & Large Heap Mode
         run: |
