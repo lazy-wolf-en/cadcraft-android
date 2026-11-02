@@ -107,13 +107,13 @@ jobs:
           }
 
           pub fn update(app: &mut CadApp, ctx: &Context) {
-              let state_id = Id::new("cadcraft_tablet_state_v8");
+              let state_id = Id::new("cadcraft_tablet_state_v9");
               let mut state = ctx.data_mut(|d| d.get_temp::<TabletState>(state_id).unwrap_or_default());
 
               // 1. FLOATING MODERN TABLET DOCK
               if state.dock_minimized {
                   Window::new("CAD")
-                      .id(Id::new("cad_dock_mini_v8"))
+                      .id(Id::new("cad_dock_mini_v9"))
                       .title_bar(false)
                       .default_pos(egui::pos2(240.0, 52.0))
                       .resizable(false)
@@ -128,7 +128,7 @@ jobs:
                       });
               } else {
                   Window::new("CAD Dock")
-                      .id(Id::new("cad_dock_full_v8"))
+                      .id(Id::new("cad_dock_full_v9"))
                       .title_bar(false)
                       .default_pos(egui::pos2(180.0, 52.0))
                       .resizable(false)
@@ -223,7 +223,7 @@ jobs:
               // 2. TABLET TOOLS PALETTE
               if state.show_tools {
                   Window::new("Tablet CAD Tools")
-                      .id(Id::new("tablet_tools_win_v8"))
+                      .id(Id::new("tablet_tools_win_v9"))
                       .default_pos(egui::pos2(18.0, 95.0))
                       .resizable(false)
                       .collapsible(true)
@@ -275,7 +275,7 @@ jobs:
                               ],
                           };
 
-                          egui::Grid::new("tablet_tool_grid_v8").spacing(Vec2::new(6.0, 6.0)).show(ui, |ui| {
+                          egui::Grid::new("tablet_tool_grid_v9").spacing(Vec2::new(6.0, 6.0)).show(ui, |ui| {
                               for (idx, &(label, cmd)) in tools.iter().enumerate() {
                                   let btn = egui::Button::new(RichText::new(label).size(13.0).strong())
                                       .fill(Color32::from_rgb(42, 48, 58))
@@ -515,19 +515,37 @@ jobs:
               svg.appendChild(g);
             })();
 
-            // Radial Pie Menu Controller
+            // Global Radial Pie Menu Controller with Device-Pixel Awareness
             var radialEl = document.getElementById("cad-radial-svg-menu");
-            window.openRadialAt = function(x, y) {
+            var lastKnownPenX = window.innerWidth / 2;
+            var lastKnownPenY = window.innerHeight / 2;
+
+            window.openRadialAt = function(x, y, isNativePixels) {
               if (!radialEl) return;
-              var posX = (x && x > 0) ? x : (window.innerWidth / 2);
-              var posY = (y && y > 0) ? y : (window.innerHeight / 2);
+              var posX, posY;
+
+              if (isNativePixels && x > 0 && y > 0) {
+                posX = x / (window.devicePixelRatio || 1);
+                posY = y / (window.devicePixelRatio || 1);
+              } else if (x > 0 && y > 0) {
+                posX = (x > window.innerWidth) ? (x / (window.devicePixelRatio || 1)) : x;
+                posY = (y > window.innerHeight) ? (y / (window.devicePixelRatio || 1)) : y;
+              } else if (lastKnownPenX > 0 && lastKnownPenY > 0) {
+                posX = lastKnownPenX;
+                posY = lastKnownPenY;
+              } else {
+                posX = window.innerWidth / 2;
+                posY = window.innerHeight / 2;
+              }
+
               var cx = Math.max(150, Math.min(window.innerWidth - 150, posX));
               var cy = Math.max(150, Math.min(window.innerHeight - 150, posY));
               radialEl.style.left = cx + "px";
               radialEl.style.top = cy + "px";
               radialEl.style.display = "block";
-              if (navigator.vibrate) try { navigator.vibrate(28); } catch(e){}
+              if (navigator.vibrate) try { navigator.vibrate(30); } catch(e){}
             };
+
             window.closeRadial = function() {
               if (radialEl) radialEl.style.display = "none";
             };
@@ -587,32 +605,54 @@ jobs:
               });
             }
 
-            // Touch, Stylus & Genuine Right-Click Management
+            // Touch, Stylus, Palm Rejection & Multi-Layer Stylus Button Trigger
             (function() {
-              var canvas = null, touches = new Map(), penDown = false, pan = null, lpTimer = null, twoTap = false, twoTime = 0;
-              var lastPenX = window.innerWidth / 2, lastPenY = window.innerHeight / 2;
+              var canvas = null, touches = new Map(), penDown = false, pan = null;
+              var touchLpTimer = null, penHoldTimer = null, twoTap = false, twoTime = 0;
+              var penStartX = 0, penStartY = 0;
               function getC() { if (!canvas) canvas = document.querySelector("canvas"); return canvas; }
 
-              // Restored genuine Right-Click for Mouse & Long-Press
+              // Restored genuine Right-Click for Mouse Context Menu
               document.addEventListener("contextmenu", function(e) {
                 if (e.target && e.target.tagName === "CANVAS") {
                   e.preventDefault();
-                  sendRightClickToCad(e.clientX, e.clientY);
+                  // If right click was dispatched from pen, open radial
+                  if (e.pointerType === "pen") {
+                    window.openRadialAt(e.clientX, e.clientY);
+                  } else {
+                    sendRightClickToCad(e.clientX, e.clientY);
+                  }
                 }
               }, { capture: true, passive: false });
+
+              function checkPenButtons(e) {
+                // Secondary (2), Auxiliary (4), Barrel Primary (32), Barrel Secondary (64)
+                if (e.button === 2 || (e.buttons & 2) !== 0 || (e.buttons & 32) !== 0 || (e.buttons & 4) !== 0 || (e.buttons & 64) !== 0) {
+                  window.openRadialAt(e.clientX, e.clientY);
+                  return true;
+                }
+                return false;
+              }
 
               window.addEventListener("pointerdown", function(e) {
                 if (radialEl.style.display === "block" && !radialEl.contains(e.target)) window.closeRadial();
                 var c = getC(); if (!c || (e.target !== c && !c.contains(e.target))) return;
 
                 if (e.pointerType === "pen") {
-                  penDown = true; lastPenX = e.clientX; lastPenY = e.clientY;
-                  // Stylus button on touchdown
-                  if (e.button === 2 || (e.buttons & 2) !== 0 || (e.buttons & 32) !== 0) {
+                  penDown = true;
+                  lastKnownPenX = e.clientX; lastKnownPenY = e.clientY;
+                  penStartX = e.clientX; penStartY = e.clientY;
+
+                  if (checkPenButtons(e)) {
                     e.preventDefault(); e.stopImmediatePropagation();
-                    window.openRadialAt(e.clientX, e.clientY);
                     return;
                   }
+
+                  // Intuitive Stylus Long-Press Shortcut: hold still for 450ms opens Radial at tip
+                  clearTimeout(penHoldTimer);
+                  penHoldTimer = setTimeout(function() {
+                    if (penDown) window.openRadialAt(penStartX, penStartY);
+                  }, 450);
                   return;
                 }
 
@@ -621,34 +661,35 @@ jobs:
                   touches.set(e.pointerId, { x: e.clientX, y: e.clientY, sx: e.clientX, sy: e.clientY });
 
                   if (touches.size === 1) {
-                    var fx = e.clientX, fy = e.clientY; clearTimeout(lpTimer);
-                    // Long press = Right Click
-                    lpTimer = setTimeout(function() {
+                    var fx = e.clientX, fy = e.clientY; clearTimeout(touchLpTimer);
+                    // Finger long press = Right Click
+                    touchLpTimer = setTimeout(function() {
                       if (touches.size === 1) sendRightClickToCad(fx, fy);
                     }, 500);
                   } else if (touches.size === 2) {
-                    clearTimeout(lpTimer); twoTap = true; twoTime = Date.now();
+                    clearTimeout(touchLpTimer); twoTap = true; twoTime = Date.now();
                     var p = Array.from(touches.values());
                     pan = { mx: (p[0].x+p[1].x)/2, my: (p[0].y+p[1].y)/2, d: Math.hypot(p[1].x-p[0].x, p[1].y-p[0].y), drag: false };
-                  } else { clearTimeout(lpTimer); twoTap = false; }
+                  } else { clearTimeout(touchLpTimer); twoTap = false; }
                 }
               }, { capture: true, passive: false });
 
-              window.addEventListener("pointermove", function(e) {
+              function handlePointerMove(e) {
                 var c = getC(); if (!c) return;
                 if (e.pointerType === "pen") {
-                  lastPenX = e.clientX; lastPenY = e.clientY;
-                  // Stylus button while moving/hovering
-                  if ((e.buttons & 2) !== 0 || (e.buttons & 32) !== 0) {
+                  lastKnownPenX = e.clientX; lastKnownPenY = e.clientY;
+                  if (Math.hypot(e.clientX - penStartX, e.clientY - penStartY) > 8) {
+                    clearTimeout(penHoldTimer);
+                  }
+                  if (checkPenButtons(e)) {
                     e.preventDefault();
-                    window.openRadialAt(e.clientX, e.clientY);
                   }
                   return;
                 }
 
                 if (e.pointerType === "touch" && touches.has(e.pointerId)) {
                   var t = touches.get(e.pointerId); t.x = e.clientX; t.y = e.clientY;
-                  if (Math.hypot(t.x - t.sx, t.y - t.sy) > 8) { clearTimeout(lpTimer); twoTap = false; }
+                  if (Math.hypot(t.x - t.sx, t.y - t.sy) > 8) { clearTimeout(touchLpTimer); twoTap = false; }
                   if (touches.size === 2 && pan) {
                     var p = Array.from(touches.values()), cmx = (p[0].x+p[1].x)/2, cmy = (p[0].y+p[1].y)/2, cd = Math.hypot(p[1].x-p[0].x, p[1].y-p[0].y);
                     if (!pan.drag && Math.hypot(cmx-pan.mx, cmy-pan.my) > 3) {
@@ -660,13 +701,15 @@ jobs:
                     pan.mx = cmx; pan.my = cmy; pan.d = cd;
                   }
                 }
-              }, { capture: true, passive: false });
+              }
+
+              window.addEventListener("pointermove", handlePointerMove, { capture: true, passive: false });
+              window.addEventListener("pointerrawupdate", handlePointerMove, { capture: true, passive: false });
 
               function handleUp(e) {
-                if (e.pointerType === "pen") { penDown = false; return; }
+                if (e.pointerType === "pen") { penDown = false; clearTimeout(penHoldTimer); return; }
                 if (e.pointerType === "touch") {
-                  clearTimeout(lpTimer);
-                  // Two finger tap = Right click
+                  clearTimeout(touchLpTimer);
                   if (touches.size === 2 && twoTap && (Date.now() - twoTime < 280)) {
                     var p = Array.from(touches.values()); sendRightClickToCad((p[0].x+p[1].x)/2, (p[0].y+p[1].y)/2);
                   }
@@ -727,64 +770,84 @@ jobs:
           package org.storytold.cadcraft;
 
           import android.os.Bundle;
-          import android.view.InputDevice;
           import android.view.KeyEvent;
           import android.view.MotionEvent;
+          import android.view.View;
           import com.getcapacitor.BridgeActivity;
 
           public class MainActivity extends BridgeActivity {
               private long lastStylusTime = 0;
+              private float lastMotionX = -1;
+              private float lastMotionY = -1;
 
               private void notifyStylusRadial(final float x, final float y) {
                   long now = System.currentTimeMillis();
-                  if (now - lastStylusTime < 350) return;
+                  if (now - lastStylusTime < 300) return;
                   lastStylusTime = now;
+
+                  final float targetX = (x > 0) ? x : lastMotionX;
+                  final float targetY = (y > 0) ? y : lastMotionY;
+
                   runOnUiThread(() -> {
                       if (getBridge() != null && getBridge().getWebView() != null) {
                           getBridge().getWebView().evaluateJavascript(
-                              "if(window.openRadialAt){ window.openRadialAt(" + x + "," + y + "); }", null
+                              "if(window.openRadialAt){ window.openRadialAt(" + targetX + "," + targetY + ", true); }", null
                           );
                       }
                   });
               }
 
               @Override
-              public boolean onKeyDown(int keyCode, KeyEvent event) {
-                  // Keycodes 308-311: STYLUS_BUTTON_PRIMARY, SECONDARY, TERTIARY, TAIL
-                  if (keyCode >= 308 && keyCode <= 311) {
-                      notifyStylusRadial(-1, -1);
-                      return true;
+              public void onCreate(Bundle savedInstanceState) {
+                  super.onCreate(savedInstanceState);
+                  if (getBridge() != null && getBridge().getWebView() != null) {
+                      getBridge().getWebView().setOnContextClickListener(v -> {
+                          notifyStylusRadial(lastMotionX, lastMotionY);
+                          return true;
+                      });
                   }
-                  return super.onKeyDown(keyCode, event);
+              }
+
+              @Override
+              public boolean dispatchKeyEvent(KeyEvent event) {
+                  if (event.getAction() == KeyEvent.ACTION_DOWN) {
+                      int keyCode = event.getKeyCode();
+                      // Keycodes 308-311 (Stylus buttons), 188-189 (Button 1/2), 85 (Media button)
+                      if ((keyCode >= 308 && keyCode <= 311) || keyCode == KeyEvent.KEYCODE_BUTTON_1 || keyCode == KeyEvent.KEYCODE_BUTTON_2 || keyCode == KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE) {
+                          notifyStylusRadial(lastMotionX, lastMotionY);
+                          return true;
+                      }
+                  }
+                  return super.dispatchKeyEvent(event);
               }
 
               @Override
               public boolean dispatchGenericMotionEvent(MotionEvent event) {
-                  if ((event.getSource() & InputDevice.SOURCE_STYLUS) == InputDevice.SOURCE_STYLUS ||
-                      (event.getSource() & InputDevice.SOURCE_BLUETOOTH_STYLUS) == InputDevice.SOURCE_BLUETOOTH_STYLUS) {
-                      int buttonState = event.getButtonState();
-                      // 32 = BUTTON_STYLUS_PRIMARY, 64 = BUTTON_STYLUS_SECONDARY, 2 = BUTTON_SECONDARY
-                      if ((buttonState & MotionEvent.BUTTON_STYLUS_PRIMARY) != 0 ||
-                          (buttonState & MotionEvent.BUTTON_STYLUS_SECONDARY) != 0 ||
-                          (buttonState & MotionEvent.BUTTON_SECONDARY) != 0) {
-                          notifyStylusRadial(event.getX(), event.getY());
-                          return true;
-                      }
+                  lastMotionX = event.getX();
+                  lastMotionY = event.getY();
+
+                  int buttonState = event.getButtonState();
+                  // Button 2 (Secondary), 4 (Tertiary), 32 (Stylus Primary), 64 (Stylus Secondary)
+                  if ((buttonState & (MotionEvent.BUTTON_SECONDARY | MotionEvent.BUTTON_TERTIARY | MotionEvent.BUTTON_STYLUS_PRIMARY | MotionEvent.BUTTON_STYLUS_SECONDARY)) != 0) {
+                      notifyStylusRadial(lastMotionX, lastMotionY);
+                      return true;
+                  }
+                  if (event.getAction() == MotionEvent.ACTION_BUTTON_PRESS) {
+                      notifyStylusRadial(lastMotionX, lastMotionY);
+                      return true;
                   }
                   return super.dispatchGenericMotionEvent(event);
               }
 
               @Override
               public boolean dispatchTouchEvent(MotionEvent event) {
-                  int toolType = event.getToolType(0);
-                  if (toolType == MotionEvent.TOOL_TYPE_STYLUS || toolType == MotionEvent.TOOL_TYPE_ERASER) {
-                      int buttonState = event.getButtonState();
-                      if ((buttonState & MotionEvent.BUTTON_STYLUS_PRIMARY) != 0 ||
-                          (buttonState & MotionEvent.BUTTON_STYLUS_SECONDARY) != 0 ||
-                          (buttonState & MotionEvent.BUTTON_SECONDARY) != 0) {
-                          notifyStylusRadial(event.getX(), event.getY());
-                          return true;
-                      }
+                  lastMotionX = event.getX();
+                  lastMotionY = event.getY();
+
+                  int buttonState = event.getButtonState();
+                  if ((buttonState & (MotionEvent.BUTTON_SECONDARY | MotionEvent.BUTTON_TERTIARY | MotionEvent.BUTTON_STYLUS_PRIMARY | MotionEvent.BUTTON_STYLUS_SECONDARY)) != 0) {
+                      notifyStylusRadial(lastMotionX, lastMotionY);
+                      return true;
                   }
                   return super.dispatchTouchEvent(event);
               }
